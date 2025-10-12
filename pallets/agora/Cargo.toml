@@ -1,0 +1,39 @@
+[package]
+name = "pallet-agora"
+description = "Agora: A verifiable computation marketplace pallet"
+version = "0.1.0"
+license = "Unlicense"
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+edition.workspace = true
+publish = false
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+codec = { features = ["derive"], workspace = true }
+scale-info = { features = ["derive"], workspace = true }
+log = { workspace = true }
+frame = { features = ["experimental", "runtime"], workspace = true }
+
+[dev-dependencies]
+sp-io = { workspace = true, default-features = true }
+pallet-balances = { version = "41.1.0", default-features = true }
+
+[features]
+default = ["std"]
+std = [
+	"codec/std",
+	"frame/std",
+	"log/std",
+	"scale-info/std",
+]
+runtime-benchmarks = [
+	"frame/runtime-benchmarks",
+]
+try-runtime = [
+	"frame/try-runtime",
+]
+
