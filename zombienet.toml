@@ -2,7 +2,7 @@
 provider = "native"
 
 [relaychain]
-default_command = "polkadot"
+default_command = "./polkadot"
 chain = "rococo-local"
 default_args = [
     "--workers-path", 
@@ -20,7 +20,7 @@ validator = true
 rpc_port = 9955
 
 [[parachains]]
-id = 1000
+id = 5021
 
 [metrics]
 enabled = false
@@ -29,4 +29,4 @@ enabled = false
 name = "charlie"
 rpc_port = 9988
 
-command = "parachain-template-node"
+command = "./target/release/parachain-template-node"
