@@ -4,6 +4,10 @@ provider = "native"
 [relaychain]
 default_command = "polkadot"
 chain = "rococo-local"
+default_args = [
+    "--workers-path", 
+    ".",
+]
 
 [[relaychain.nodes]]
 name = "alice"
@@ -24,4 +28,5 @@ enabled = false
 [parachains.collator]
 name = "charlie"
 rpc_port = 9988
+
 command = "parachain-template-node"
