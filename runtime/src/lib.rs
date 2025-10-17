@@ -33,6 +33,7 @@ use frame_support::weights::{
 	constants::WEIGHT_REF_TIME_PER_SECOND, Weight, WeightToFeeCoefficient, WeightToFeeCoefficients,
 	WeightToFeePolynomial,
 };
+use frame_support::traits::{ConstU128, ConstU32};
 pub use genesis_config_presets::PARACHAIN_ID;
 pub use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 pub use sp_runtime::{MultiAddress, Perbill, Permill};
@@ -249,6 +250,18 @@ pub fn native_version() -> NativeVersion {
 	NativeVersion { runtime_version: VERSION, can_author_with: Default::default() }
 }
 
+/// Configure the Agora pallet
+impl pallet_agora::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Currency = Balances;
+	type RuntimeHoldReason = RuntimeHoldReason;
+	type WeightInfo = (); // Use unit weights for now
+    type CommitPhaseDuration = ConstU32<10>; // 10 blocks (~1 minute)
+    type RevealPhaseDuration = ConstU32<10>; // 10 blocks (~1 minute)
+	type MinWorkerStake = ConstU128<{ 100 * UNIT }>;
+	type MinJobBounty = ConstU128<{ 50 * UNIT }>;
+}
+
 // Create the runtime by composing the FRAME pallets that were previously configured.
 #[frame_support::runtime]
 mod runtime {
@@ -313,6 +326,10 @@ mod runtime {
 	// Template
 	#[runtime::pallet_index(50)]
 	pub type TemplatePallet = pallet_parachain_template;
+
+	// Agora - Verifiable Computation Marketplace
+	#[runtime::pallet_index(51)]
+	pub type Agora = pallet_agora;
 }
 
 #[docify::export(register_validate_block)]
