@@ -20,7 +20,7 @@ validator = true
 rpc_port = 9955
 
 [[parachains]]
-id = 5021
+id = 1000
 
 [metrics]
 enabled = false

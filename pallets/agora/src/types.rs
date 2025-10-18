@@ -81,7 +81,9 @@ pub struct WorkerInfo<T: frame_system::Config> {
 pub struct Commit<T: frame_system::Config> {
 	/// Worker who made the commit
 	pub worker: T::AccountId,
-	/// Hash of the result
+	/// Salt used in the commit (32 bytes)
+	pub salt: [u8; 32],
+	/// Hash of salt + result (prevents preimage grinding)
 	pub result_hash: T::Hash,
 	/// Block number when commit was made
 	pub committed_at: BlockNumberFor<T>,
@@ -93,6 +95,8 @@ pub struct Commit<T: frame_system::Config> {
 pub struct Reveal<T: frame_system::Config> {
 	/// Worker who revealed
 	pub worker: T::AccountId,
+	/// Salt used in the commit (32 bytes)
+	pub salt: [u8; 32],
 	/// Actual result data
 	pub result: BoundedVec<u8, ConstU32<2048>>,
 	/// Block number when revealed

@@ -256,10 +256,15 @@ impl pallet_agora::Config for Runtime {
 	type Currency = Balances;
 	type RuntimeHoldReason = RuntimeHoldReason;
 	type WeightInfo = (); // Use unit weights for now
-    type CommitPhaseDuration = ConstU32<10>; // 10 blocks (~1 minute)
-    type RevealPhaseDuration = ConstU32<10>; // 10 blocks (~1 minute)
+	type CommitPhaseDuration = ConstU32<30>; // 30 blocks (~3 minutes)
+	type RevealPhaseDuration = ConstU32<30>; // 30 blocks (~3 minutes)
 	type MinWorkerStake = ConstU128<{ 100 * UNIT }>;
 	type MinJobBounty = ConstU128<{ 50 * UNIT }>;
+	type MaxInputBytes = ConstU32<1024>; // 1KB max input
+	type MaxCommitsPerJob = ConstU32<100>; // Max 100 commits per job
+	type MaxRevealsPerJob = ConstU32<100>; // Max 100 reveals per job
+	type MaxConcurrentJobsPerAccount = ConstU32<10>; // Max 10 concurrent jobs per account
+	type UnbondingBlocks = ConstU32<100>; // 100 blocks unbonding delay
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.

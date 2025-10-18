@@ -53,10 +53,15 @@ impl crate::Config for Test {
 	type Currency = Balances;
 	type RuntimeHoldReason = RuntimeHoldReason;
 	type WeightInfo = ();
-	type CommitPhaseDuration = ConstU64<10>;
-	type RevealPhaseDuration = ConstU64<10>;
+	type CommitPhaseDuration = ConstU64<30>; // 30 blocks (~3 minutes)
+	type RevealPhaseDuration = ConstU64<30>; // 30 blocks (~3 minutes)
 	type MinWorkerStake = ConstU128<100>;
 	type MinJobBounty = ConstU128<50>;
+	type MaxInputBytes = ConstU32<1024>;
+	type MaxCommitsPerJob = ConstU32<100>;
+	type MaxRevealsPerJob = ConstU32<100>;
+	type MaxConcurrentJobsPerAccount = ConstU32<10>;
+	type UnbondingBlocks = ConstU64<100>;
 }
 
 // Build genesis storage according to the mock runtime.

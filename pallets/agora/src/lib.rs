@@ -74,6 +74,26 @@ pub mod pallet {
 		/// Minimum bounty for a job
 		#[pallet::constant]
 		type MinJobBounty: Get<u128>;
+
+		/// Maximum input data size for a job
+		#[pallet::constant]
+		type MaxInputBytes: Get<u32>;
+
+		/// Maximum number of commits per job
+		#[pallet::constant]
+		type MaxCommitsPerJob: Get<u32>;
+
+		/// Maximum number of reveals per job
+		#[pallet::constant]
+		type MaxRevealsPerJob: Get<u32>;
+
+		/// Maximum concurrent jobs per account
+		#[pallet::constant]
+		type MaxConcurrentJobsPerAccount: Get<u32>;
+
+		/// Unbonding delay for workers in blocks
+		#[pallet::constant]
+		type UnbondingBlocks: Get<BlockNumberFor<Self>>;
 	}
 
 	/// Reasons for holding balances
@@ -116,6 +136,28 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn next_job_id)]
 	pub type NextJobId<T: Config> = StorageValue<_, JobId, ValueQuery>;
+
+	/// Storage for worker unbonding information
+	#[pallet::storage]
+	#[pallet::getter(fn unbonding_workers)]
+	pub type UnbondingWorkers<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		BlockNumberFor<T>,
+		ValueQuery,
+	>;
+
+	/// Storage for tracking concurrent jobs per account
+	#[pallet::storage]
+	#[pallet::getter(fn account_job_count)]
+	pub type AccountJobCount<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		T::AccountId,
+		u32,
+		ValueQuery,
+	>;
 
 	/// Events emitted by the pallet
 	#[pallet::event]
@@ -172,10 +214,35 @@ pub mod pallet {
 		InputDataTooLarge,
 		/// Insufficient balance
 		InsufficientBalance,
+		/// Worker is in unbonding period
+		WorkerUnbonding,
+		/// Too many concurrent jobs
+		TooManyConcurrentJobs,
+		/// Salt verification failed
+		SaltVerificationFailed,
+		/// Worker has already revealed for this job
+		AlreadyRevealed,
+		/// Job has been cancelled
+		JobCancelled,
+		/// Unbonding period not completed
+		UnbondingPeriodNotCompleted,
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		/// Initialize block - handle job lifecycle transitions
+		fn on_initialize(block_number: BlockNumberFor<T>) -> Weight {
+			let mut weight = Weight::from_parts(0, 0);
+			
+			// Process job lifecycle transitions
+			weight = weight.saturating_add(Self::process_job_transitions(block_number));
+			
+			// Process unbonding workers
+			weight = weight.saturating_add(Self::process_unbonding_workers(block_number));
+			
+			weight
+		}
+
 		/// Off-chain worker entry point
 		fn offchain_worker(block_number: BlockNumberFor<T>) {
 			log::info!("🔧 Agora off-chain worker executing at block {:?}", block_number);
@@ -186,6 +253,18 @@ pub mod pallet {
 			// 2. Execute jobs (API calls, computations)
 			// 3. Submit commit transactions
 			// 4. Submit reveal transactions when appropriate
+		}
+	}
+
+	/// Validate unsigned transactions from off-chain workers
+	#[pallet::validate_unsigned]
+	impl<T: Config> ValidateUnsigned for Pallet<T> {
+		type Call = Call<T>;
+
+		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+			// For now, reject all unsigned transactions
+			// In a full implementation, this would validate OCW transactions
+			InvalidTransaction::Call.into()
 		}
 	}
 
@@ -329,12 +408,14 @@ pub mod pallet {
 		/// # Arguments
 		/// * `origin` - The worker committing the result
 		/// * `job_id` - ID of the job
-		/// * `result_hash` - Hash of the result
+		/// * `salt` - Salt used for hashing (32 bytes)
+		/// * `result_hash` - Hash of salt + result
 		#[pallet::call_index(3)]
 		#[pallet::weight(Weight::from_parts(10_000, 0) + T::DbWeight::get().reads_writes(2, 1))]
 		pub fn commit_result(
 			origin: OriginFor<T>,
 			job_id: JobId,
+			salt: [u8; 32],
 			result_hash: T::Hash,
 		) -> DispatchResult {
 			let worker = ensure_signed(origin)?;
@@ -365,7 +446,12 @@ pub mod pallet {
 			);
 
 			// Create commit
-			let commit = Commit { worker: worker.clone(), result_hash, committed_at: current_block };
+			let commit = Commit { 
+				worker: worker.clone(), 
+				salt,
+				result_hash, 
+				committed_at: current_block 
+			};
 
 			// Add commit
 			commits.try_push(commit).map_err(|_| Error::<T>::AlreadyCommitted)?;
@@ -415,9 +501,12 @@ pub mod pallet {
 				.find(|c| c.worker == worker)
 				.ok_or(Error::<T>::NotCommitted)?;
 
-			// Verify hash matches
-			let result_hash = T::Hashing::hash(&result);
-			ensure!(result_hash == commit.result_hash, Error::<T>::CommitMismatch);
+			// Verify salted hash matches: hash(salt || result)
+			let mut salted_input = Vec::new();
+			salted_input.extend_from_slice(&commit.salt);
+			salted_input.extend_from_slice(&result);
+			let salted_hash = T::Hashing::hash(&salted_input);
+			ensure!(salted_hash == commit.result_hash, Error::<T>::SaltVerificationFailed);
 
 			// Convert to bounded vec
 			let bounded_result: BoundedVec<u8, ConstU32<2048>> =
@@ -426,9 +515,16 @@ pub mod pallet {
 			// Get or create reveals vector
 			let mut reveals = Reveals::<T>::get(job_id).unwrap_or_default();
 
+			// Check if worker already revealed
+			ensure!(
+				!reveals.iter().any(|r| r.worker == worker),
+				Error::<T>::AlreadyRevealed
+			);
+
 			// Create reveal
 			let reveal = Reveal {
 				worker: worker.clone(),
+				salt: commit.salt,
 				result: bounded_result,
 				revealed_at: current_block,
 			};
@@ -582,6 +678,118 @@ pub mod pallet {
 					});
 				}
 			}
+
+			Ok(())
+		}
+
+		/// Process job lifecycle transitions (called in on_initialize)
+		fn process_job_transitions(block_number: BlockNumberFor<T>) -> Weight {
+			let mut weight = Weight::from_parts(0, 0);
+			let mut processed_jobs = 0;
+
+			// Iterate through all jobs to find those needing transitions
+			Jobs::<T>::iter().for_each(|(job_id, mut job)| {
+				if processed_jobs >= 10 { // Limit processing per block
+					return;
+				}
+
+				match job.status {
+					JobStatus::Pending => {
+						// Auto-transition to CommitPhase when commit deadline approaches
+						if block_number >= job.commit_deadline.saturating_sub(T::CommitPhaseDuration::get()) {
+							job.status = JobStatus::CommitPhase;
+							Jobs::<T>::insert(job_id, job);
+							processed_jobs += 1;
+							weight = weight.saturating_add(T::DbWeight::get().writes(1));
+						}
+					}
+					JobStatus::CommitPhase => {
+						// Auto-transition to RevealPhase when commit deadline passes
+						if block_number > job.commit_deadline {
+							job.status = JobStatus::RevealPhase;
+							Jobs::<T>::insert(job_id, job);
+							processed_jobs += 1;
+							weight = weight.saturating_add(T::DbWeight::get().writes(1));
+						}
+					}
+					JobStatus::RevealPhase => {
+						// Auto-finalize when reveal deadline passes
+						if block_number > job.reveal_deadline {
+							if let Ok(_) = Self::finalize_job_internal(job_id, &job) {
+								processed_jobs += 1;
+								weight = weight.saturating_add(T::DbWeight::get().reads_writes(5, 3));
+							}
+						}
+					}
+					_ => {} // No action needed for Completed/Failed jobs
+				}
+			});
+
+			weight
+		}
+
+		/// Process unbonding workers (called in on_initialize)
+		fn process_unbonding_workers(block_number: BlockNumberFor<T>) -> Weight {
+			let mut weight = Weight::from_parts(0, 0);
+			let mut processed_workers = 0;
+
+			// Find workers ready to complete unbonding
+			UnbondingWorkers::<T>::iter().for_each(|(worker, unbonding_block)| {
+				if processed_workers >= 5 { // Limit processing per block
+					return;
+				}
+
+				if block_number >= unbonding_block {
+					// Complete unbonding
+					if let Some(worker_info) = Workers::<T>::get(&worker) {
+						// Release stake
+						let _ = T::Currency::release(
+							&HoldReason::WorkerStake.into(),
+							&worker,
+							worker_info.stake,
+							frame::traits::tokens::Precision::BestEffort,
+						);
+
+						// Remove from unbonding and workers
+						UnbondingWorkers::<T>::remove(&worker);
+						Workers::<T>::remove(&worker);
+
+						processed_workers += 1;
+						weight = weight.saturating_add(T::DbWeight::get().writes(2));
+
+						Self::deposit_event(Event::WorkerUnregistered { worker });
+					}
+				}
+			});
+
+			weight
+		}
+
+		/// Internal finalize job function (used by both manual and auto-finalization)
+		fn finalize_job_internal(job_id: JobId, job: &Job<T>) -> DispatchResult {
+			// Get reveals
+			let reveals = Reveals::<T>::get(job_id).ok_or(Error::<T>::InsufficientReveals)?;
+			ensure!(reveals.len() > 0, Error::<T>::InsufficientReveals);
+
+			// Determine consensus result
+			let consensus_result = Self::determine_consensus(&reveals)?;
+
+			// Distribute rewards and slash dishonest workers
+			Self::distribute_rewards_and_slash(job_id, job, &reveals, &consensus_result)?;
+
+			// Store final result
+			Results::<T>::insert(job_id, consensus_result.clone());
+
+			// Update job status
+			let mut updated_job = job.clone();
+			updated_job.status = JobStatus::Completed;
+			Jobs::<T>::insert(job_id, updated_job);
+
+			// Emit event
+			Self::deposit_event(Event::JobFinalized {
+				job_id,
+				result: consensus_result.to_vec(),
+			});
 
 			Ok(())
 		}
