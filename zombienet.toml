@@ -1,6 +1,9 @@
 [settings]
 provider = "native"
 
+[general]
+base_path = "/tmp/zombienet"
+
 [relaychain]
 default_command = "./polkadot"
 chain = "rococo-local"
