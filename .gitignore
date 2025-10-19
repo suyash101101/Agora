@@ -6,3 +6,4 @@ polkadot
 polkadot-execute-worker
 polkadot-prepare-worker
 *.dylib
+node_modules/
