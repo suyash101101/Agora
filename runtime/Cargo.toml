@@ -28,19 +28,12 @@ polkadot-sdk = { workspace = true, features = ["cumulus-pallet-aura-ext", "cumul
 scale-info = { features = ["derive"], workspace = true }
 serde_json = { workspace = true, default-features = false, features = ["alloc"] }
 smallvec = { workspace = true, default-features = true }
+substrate-wasm-builder = { version = "4.0.0", default-features = false }
+
 
 [features]
 default = ["std"]
 std = [
-	"codec/std",
-	"cumulus-pallet-parachain-system/std",
-	"log/std",
-	"pallet-parachain-template/std",
-	"pallet-agora/std",
-	"polkadot-sdk/std",
-	"scale-info/std",
-	"serde_json/std",
-	"substrate-wasm-builder",
 ]
 
 runtime-benchmarks = [
@@ -65,8 +58,7 @@ try-runtime = [
 # generate the metadata hash and then a second time with the
 # `RUNTIME_METADATA_HASH` environment variable set for the `CheckMetadataHash`
 # extension.
-metadata-hash = ["substrate-wasm-builder/metadata-hash"]
+
 
 # A convenience feature for enabling things when doing a build
 # for an on-chain release.
-on-chain-release-build = ["metadata-hash"]

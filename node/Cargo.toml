@@ -21,7 +21,7 @@ parachain-template-runtime.workspace = true
 polkadot-sdk = { workspace = true, features = ["node"] }
 prometheus-endpoint.default-features = true
 prometheus-endpoint.workspace = true
-serde = { features = ["derive"], workspace = true, default-features = true }
+serde = { features = ["derive"], workspace = true, default-features = false }
 
 [build-dependencies]
 polkadot-sdk = { workspace = true, features = ["substrate-build-script-utils"] }

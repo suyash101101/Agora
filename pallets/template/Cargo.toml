@@ -20,5 +20,5 @@ scale-info = { features = ["derive"], workspace = true }
 [features]
 default = ["std"]
 runtime-benchmarks = ["frame/runtime-benchmarks"]
-std = ["codec/std", "frame/std", "scale-info/std"]
+std = []
 try-runtime = ["frame/try-runtime"]

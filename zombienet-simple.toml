@@ -17,12 +17,19 @@ rpc_port = 9955
 
 [[parachains]]
 id = 1000
+genesis_state_builder = { add_authority = true, balance = "1000000000000000000000" }
 
 [parachains.collator]
 name = "charlie"
 rpc_port = 9988
 command = "./target/release/parachain-template-node"
 args = ["--collator"]
+
+[parachains.collator.key_store]
+    keys = [
+        ["agor", "dilemma humor paddle inhale open text inside chronic mask hair speak name"]
+    ]
+balance = { address = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", amount = "100000000000000000000" } # Example: 100 UNITs
 
 [metrics]
 enabled = false
