@@ -103,3 +103,44 @@ pub struct Reveal<T: frame_system::Config> {
 	pub revealed_at: BlockNumberFor<T>,
 }
 
+/// OCW Job Status for tracking off-chain worker execution
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+pub enum OCWJobStatus {
+	/// Job is pending OCW execution
+	PendingExecution,
+	/// Job is being executed by OCW
+	Executing,
+	/// Job execution completed, waiting for commit
+	ExecutionCompleted,
+	/// Job committed, waiting for reveal
+	Committed,
+	/// Job revealed, waiting for finalization
+	Revealed,
+	/// Job completed by OCW
+	Completed,
+	/// Job failed during OCW execution
+	Failed,
+}
+
+/// OCW Execution State for tracking job execution
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+#[scale_info(skip_type_params(T))]
+pub struct OCWExecutionState<T: frame_system::Config> {
+	/// Job ID
+	pub job_id: JobId,
+	/// Execution status
+	pub status: OCWJobStatus,
+	/// Computed result
+	pub result: BoundedVec<u8, ConstU32<2048>>,
+	/// Salt used for commit
+	pub salt: [u8; 32],
+	/// Commit hash
+	pub commit_hash: [u8; 32],
+	/// Block when execution started
+	pub execution_start_block: BlockNumberFor<T>,
+	/// Block when commit was submitted
+	pub commit_block: Option<BlockNumberFor<T>>,
+	/// Block when reveal was submitted
+	pub reveal_block: Option<BlockNumberFor<T>>,
+}
+

@@ -30,7 +30,7 @@ pub mod weights;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-use alloc::vec::Vec;
+use alloc::{format, string::String, vec::Vec};
 use frame::prelude::*;
 use frame::traits::fungible::{Inspect, Mutate, MutateHold};
 use types::*;
@@ -245,14 +245,10 @@ pub mod pallet {
 
 		/// Off-chain worker entry point
 		fn offchain_worker(block_number: BlockNumberFor<T>) {
-			log::info!("🔧 Agora off-chain worker executing at block {:?}", block_number);
-			
-			// This is a placeholder for off-chain worker logic
-			// In a full implementation, this would:
-			// 1. Fetch pending jobs from storage
-			// 2. Execute jobs (API calls, computations)
-			// 3. Submit commit transactions
-			// 4. Submit reveal transactions when appropriate
+		log::info!("🔧 Agora OCW executing at block {:?}", block_number);
+		
+		// Process pending jobs
+		Self::ocw_process_jobs(block_number);
 		}
 	}
 
@@ -261,7 +257,7 @@ pub mod pallet {
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
 
-		fn validate_unsigned(source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+		fn validate_unsigned(_source: TransactionSource, _call: &Self::Call) -> TransactionValidity {
 			// For now, reject all unsigned transactions
 			// In a full implementation, this would validate OCW transactions
 			InvalidTransaction::Call.into()
@@ -587,6 +583,231 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
+		/// Off-chain worker job processing
+		fn ocw_process_jobs(block_number: BlockNumberFor<T>) {
+			log::info!("🔍 OCW checking for jobs at block {:?}", block_number);
+			
+			// Check for pending jobs
+			let pending_jobs = Self::get_pending_jobs();
+			log::info!("📋 Found {} pending jobs", pending_jobs.len());
+			
+			for job_id in pending_jobs {
+				log::info!("⚙️ Processing job {} at block {:?}", job_id, block_number);
+				
+				// Check if we should execute this job
+				if Self::should_execute_job(job_id) {
+					log::info!("✅ Job {} ready for execution", job_id);
+					
+					// Execute the job based on its type
+					if let Some(job) = Jobs::<T>::get(job_id) {
+						match job.job_type {
+							JobType::ApiRequest => {
+								log::info!("🌐 Executing API job {}", job_id);
+								Self::execute_api_job_with_commit(job_id, &job, block_number);
+							},
+							JobType::Computation => {
+								log::info!("🧮 Executing computation job {}", job_id);
+								Self::execute_computation_job_with_commit(job_id, &job, block_number);
+							},
+						}
+					}
+				} else {
+					log::info!("⏳ Job {} not ready yet", job_id);
+				}
+			}
+			
+			// Check for jobs ready to reveal
+			let reveal_jobs = Self::get_jobs_ready_for_reveal(block_number);
+			log::info!("🔓 Found {} jobs ready for reveal", reveal_jobs.len());
+			
+			for job_id in reveal_jobs {
+				log::info!("🔓 Job {} ready for reveal at block {:?}", job_id, block_number);
+				// TODO: Submit reveal transaction (Step 2.4 - Automated Reveal Submission)
+				log::info!("📤 Would submit reveal transaction for job {}", job_id);
+			}
+		}
+		
+		/// Get all pending jobs
+		fn get_pending_jobs() -> Vec<JobId> {
+			let mut pending_jobs = Vec::new();
+			
+			Jobs::<T>::iter().for_each(|(job_id, job)| {
+				if job.status == JobStatus::Pending {
+					pending_jobs.push(job_id);
+				}
+			});
+			
+			pending_jobs
+		}
+		
+		/// Check if job should be executed by OCW
+		fn should_execute_job(_job_id: JobId) -> bool {
+			// For now, execute all pending jobs
+			// Later we'll add logic to prevent duplicate execution
+			true
+		}
+		
+		/// Get jobs ready for reveal phase
+		fn get_jobs_ready_for_reveal(current_block: BlockNumberFor<T>) -> Vec<JobId> {
+			let mut reveal_jobs = Vec::new();
+			
+			Jobs::<T>::iter().for_each(|(job_id, job)| {
+				if job.status == JobStatus::CommitPhase && current_block > job.commit_deadline {
+					// Check if we have a pending commit for this job
+					if Self::has_pending_commit(job_id) {
+						reveal_jobs.push(job_id);
+					}
+				}
+			});
+			
+			reveal_jobs
+		}
+		
+		/// Check if we have a pending commit for this job in local storage
+		fn has_pending_commit(_job_id: JobId) -> bool {
+			// TODO: Implement local storage check (Step 2.3)
+			// For now, return false
+			false
+		}
+		
+		/// Execute an API job with automated commit submission
+		fn execute_api_job_with_commit(job_id: JobId, job: &Job<T>, block_number: BlockNumberFor<T>) {
+			log::info!("🌐 Starting API execution for job {}", job_id);
+			
+			// Parse the input data as URL
+			let input_str = String::from_utf8_lossy(&job.input_data);
+			log::info!("📡 Would make HTTP request to: {}", input_str);
+			
+			// For now, simulate API response
+			let simulated_response = format!("API response for: {}", input_str);
+			log::info!("📦 Simulated response: {}", simulated_response);
+			
+			// Generate salt and commit hash
+			let salt = Self::generate_salt();
+			let result_bytes = simulated_response.as_bytes().to_vec();
+			let commit_hash = Self::calculate_commit_hash(&salt, &result_bytes);
+			
+			log::info!("🔐 Generated salt: {:?}", salt);
+			log::info!("🔑 Commit hash: {:?}", commit_hash);
+			
+			// Store execution state
+			let execution_state = OCWExecutionState {
+				job_id,
+				status: OCWJobStatus::ExecutionCompleted,
+				result: BoundedVec::try_from(result_bytes).unwrap_or_default(),
+				salt,
+				commit_hash,
+				execution_start_block: block_number,
+				commit_block: None,
+				reveal_block: None,
+			};
+			
+			Self::store_execution_state(job_id, &execution_state);
+			
+			// TODO: Submit commit transaction (Step 2.3 - Automated Commit Submission)
+			log::info!("📤 Would submit commit transaction for job {}", job_id);
+		}
+		
+		/// Execute a computation job with automated commit submission
+		fn execute_computation_job_with_commit(job_id: JobId, job: &Job<T>, block_number: BlockNumberFor<T>) {
+			log::info!("🧮 Starting computation execution for job {}", job_id);
+			
+			// For now, just simulate computation
+			let input_str = String::from_utf8_lossy(&job.input_data);
+			log::info!("🔢 Computing result for input: {}", input_str);
+			
+			// Simple computation: hash the input
+			let result = frame::hashing::blake2_256(&job.input_data);
+			log::info!("🎯 Computation result: {:?}", result);
+			
+			// Generate salt and commit hash
+			let salt = Self::generate_salt();
+			let result_bytes = result.to_vec();
+			let commit_hash = Self::calculate_commit_hash(&salt, &result_bytes);
+			
+			log::info!("🔐 Generated salt: {:?}", salt);
+			log::info!("🔑 Commit hash: {:?}", commit_hash);
+			
+			// Store execution state
+			let execution_state = OCWExecutionState {
+				job_id,
+				status: OCWJobStatus::ExecutionCompleted,
+				result: BoundedVec::try_from(result_bytes).unwrap_or_default(),
+				salt,
+				commit_hash,
+				execution_start_block: block_number,
+				commit_block: None,
+				reveal_block: None,
+			};
+			
+			Self::store_execution_state(job_id, &execution_state);
+			
+			// TODO: Submit commit transaction (Step 2.3 - Automated Commit Submission)
+			log::info!("📤 Would submit commit transaction for job {}", job_id);
+		}
+		
+		/// Store API result in local storage
+		fn store_api_result(job_id: JobId, _result: Vec<u8>) {
+			let _key = Self::derive_job_result_key(job_id);
+			// TODO: Implement actual local storage (Step 2.3)
+			log::info!("💾 Would store API result for job {} in local storage", job_id);
+		}
+		
+		/// Store computation result in local storage
+		fn store_computation_result(job_id: JobId, _result: Vec<u8>) {
+			let _key = Self::derive_job_result_key(job_id);
+			// TODO: Implement actual local storage (Step 2.3)
+			log::info!("💾 Would store computation result for job {} in local storage", job_id);
+		}
+		
+		/// Derive a unique key for storing job results
+		fn derive_job_result_key(job_id: JobId) -> Vec<u8> {
+			let mut key = b"agora_job_result_".to_vec();
+			key.extend_from_slice(&job_id.to_le_bytes());
+			key
+		}
+		
+		/// Generate a random salt for commit-reveal
+		fn generate_salt() -> [u8; 32] {
+			// Use block hash and timestamp for pseudo-random salt
+			let block_hash = frame_system::Pallet::<T>::block_hash(frame_system::Pallet::<T>::block_number());
+			let mut salt = [0u8; 32];
+			salt.copy_from_slice(&block_hash.as_ref()[..32]);
+			salt
+		}
+		
+		/// Calculate commit hash from salt and result
+		fn calculate_commit_hash(salt: &[u8; 32], result: &[u8]) -> [u8; 32] {
+			let mut salted_input = Vec::new();
+			salted_input.extend_from_slice(salt);
+			salted_input.extend_from_slice(result);
+			frame::hashing::blake2_256(&salted_input)
+		}
+		
+		/// Store execution state in local storage
+		fn store_execution_state(job_id: JobId, _state: &OCWExecutionState<T>) {
+			let _key = Self::derive_execution_state_key(job_id);
+			// TODO: Implement actual local storage (Step 2.3)
+			log::info!("💾 Would store execution state for job {} in local storage", job_id);
+		}
+		
+		/// Get execution state from local storage
+		fn get_execution_state(_job_id: JobId) -> Option<OCWExecutionState<T>> {
+			// TODO: Implement actual local storage (Step 2.3)
+			// For now, return None
+			None
+		}
+		
+		/// Derive a unique key for storing execution state
+		fn derive_execution_state_key(job_id: JobId) -> Vec<u8> {
+			let mut key = b"agora_exec_state_".to_vec();
+			key.extend_from_slice(&job_id.to_le_bytes());
+			key
+		}
+		
+		// TODO: Implement transaction submission functions (Step 2.3 & 2.4)
+		// These will be implemented when we have proper OCW transaction support
+
 		/// Determine consensus result from reveals (simple majority)
 		fn determine_consensus(
 			reveals: &BoundedVec<Reveal<T>, ConstU32<100>>,
