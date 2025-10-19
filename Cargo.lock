@@ -7968,7 +7968,9 @@ dependencies = [
  "parity-scale-codec",
  "polkadot-sdk-frame",
  "scale-info",
+ "sp-core",
  "sp-io",
+ "sp-runtime",
 ]
 
 [[package]]

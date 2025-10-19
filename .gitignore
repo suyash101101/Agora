@@ -1,1 +1,8 @@
 target/
+
+# Binary executables
+zombienet
+polkadot
+polkadot-execute-worker
+polkadot-prepare-worker
+*.dylib
