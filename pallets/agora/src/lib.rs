@@ -33,6 +33,10 @@ mod benchmarking;
 use alloc::{format, string::String, vec::Vec};
 use frame::prelude::*;
 use frame::traits::fungible::{Inspect, Mutate, MutateHold};
+use sp_runtime::{
+	traits::Hash,
+	transaction_validity::{InvalidTransaction, TransactionValidity, ValidTransaction},
+};
 use types::*;
 
 #[frame::pallet]
@@ -257,10 +261,66 @@ pub mod pallet {
 	impl<T: Config> ValidateUnsigned for Pallet<T> {
 		type Call = Call<T>;
 
-		fn validate_unsigned(_source: TransactionSource, _call: &Self::Call) -> TransactionValidity {
-			// For now, reject all unsigned transactions
-			// In a full implementation, this would validate OCW transactions
-			InvalidTransaction::Call.into()
+		fn validate_unsigned(_source: sp_runtime::transaction_validity::TransactionSource, call: &Self::Call) -> TransactionValidity {
+			match call {
+				Call::commit_result { job_id, salt, result_hash: _ } => {
+					// Validate that the job exists and is in the correct phase
+					if let Some(job) = Jobs::<T>::get(*job_id) {
+						if job.status != JobStatus::CommitPhase {
+							return InvalidTransaction::Custom(1).into();
+						}
+						
+						// Check if commit deadline has passed
+						let current_block = frame_system::Pallet::<T>::block_number();
+						if current_block > job.commit_deadline {
+							return InvalidTransaction::Custom(2).into();
+						}
+						
+						// Validate salt format
+						if salt.len() != 32 {
+							return InvalidTransaction::Custom(3).into();
+						}
+						
+						ValidTransaction::with_tag_prefix("agora-commit")
+							.priority(1000)
+							.and_provides((*job_id, *salt))
+							.longevity(64)
+							.propagate(true)
+							.build()
+					} else {
+						InvalidTransaction::Custom(4).into()
+					}
+				},
+				Call::reveal_result { job_id, result } => {
+					// Validate that the job exists and is in the correct phase
+					if let Some(job) = Jobs::<T>::get(*job_id) {
+						if job.status != JobStatus::RevealPhase {
+							return InvalidTransaction::Custom(5).into();
+						}
+						
+						// Check if reveal deadline has passed
+						let current_block = frame_system::Pallet::<T>::block_number();
+						if current_block > job.reveal_deadline {
+							return InvalidTransaction::Custom(6).into();
+						}
+						
+						// Validate result format
+						if result.len() > 2048 {
+							return InvalidTransaction::Custom(7).into();
+						}
+						
+						ValidTransaction::with_tag_prefix("agora-reveal")
+							.priority(1000)
+							.and_provides(*job_id)
+							.longevity(64)
+							.propagate(true)
+							.build()
+					} else {
+						InvalidTransaction::Custom(8).into()
+					}
+				},
+				_ => InvalidTransaction::Call.into(),
+			}
 		}
 	}
 
@@ -622,8 +682,8 @@ pub mod pallet {
 			
 			for job_id in reveal_jobs {
 				log::info!("🔓 Job {} ready for reveal at block {:?}", job_id, block_number);
-				// TODO: Submit reveal transaction (Step 2.4 - Automated Reveal Submission)
-				log::info!("📤 Would submit reveal transaction for job {}", job_id);
+				// Submit reveal transaction
+				Self::submit_reveal_transaction(job_id, block_number);
 			}
 		}
 		
@@ -704,8 +764,8 @@ pub mod pallet {
 			
 			Self::store_execution_state(job_id, &execution_state);
 			
-			// TODO: Submit commit transaction (Step 2.3 - Automated Commit Submission)
-			log::info!("📤 Would submit commit transaction for job {}", job_id);
+			// Submit commit transaction
+			Self::submit_commit_transaction(job_id, salt, commit_hash, block_number);
 		}
 		
 		/// Execute a computation job with automated commit submission
@@ -742,8 +802,8 @@ pub mod pallet {
 			
 			Self::store_execution_state(job_id, &execution_state);
 			
-			// TODO: Submit commit transaction (Step 2.3 - Automated Commit Submission)
-			log::info!("📤 Would submit commit transaction for job {}", job_id);
+			// Submit commit transaction
+			Self::submit_commit_transaction(job_id, salt, commit_hash, block_number);
 		}
 		
 		/// Store API result in local storage
@@ -805,8 +865,42 @@ pub mod pallet {
 			key
 		}
 		
-		// TODO: Implement transaction submission functions (Step 2.3 & 2.4)
-		// These will be implemented when we have proper OCW transaction support
+		/// Submit commit transaction
+		/// Note: For now, this logs the transaction data. In a production implementation,
+		/// this would submit an unsigned transaction to the transaction pool.
+		fn submit_commit_transaction(job_id: JobId, salt: [u8; 32], commit_hash: [u8; 32], _block_number: BlockNumberFor<T>) {
+			log::info!("📤 OCW would submit commit transaction for job {}", job_id);
+			log::info!("   Salt: {:?}", salt);
+			log::info!("   Commit Hash: {:?}", commit_hash);
+			log::info!("   ⚠️  Transaction submission requires runtime configuration - currently logged only");
+			
+			// TODO: Implement actual unsigned transaction submission
+			// This requires:
+			// 1. Runtime to implement CreateTransactionBase
+			// 2. Transaction pool integration
+			// 3. Proper ValidateUnsigned implementation
+		}
+		
+		/// Submit reveal transaction
+		/// Note: For now, this logs the transaction data. In a production implementation,
+		/// this would submit an unsigned transaction to the transaction pool.
+		fn submit_reveal_transaction(job_id: JobId, _block_number: BlockNumberFor<T>) {
+			log::info!("📤 OCW would submit reveal transaction for job {}", job_id);
+			
+			if let Some(state) = Self::get_execution_state(job_id) {
+				log::info!("   Result: {:?}", state.result);
+				log::info!("   Salt: {:?}", state.salt);
+				log::info!("   ⚠️  Transaction submission requires runtime configuration - currently logged only");
+				
+				// TODO: Implement actual unsigned transaction submission
+				// This requires:
+				// 1. Runtime to implement CreateTransactionBase
+				// 2. Transaction pool integration
+				// 3. Proper ValidateUnsigned implementation
+			} else {
+				log::error!("❌ No execution state found for job {}", job_id);
+			}
+		}
 
 		/// Determine consensus result from reveals (simple majority)
 		fn determine_consensus(

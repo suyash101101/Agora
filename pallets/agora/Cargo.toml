@@ -17,6 +17,8 @@ codec = { features = ["derive"], workspace = true }
 scale-info = { features = ["derive"], workspace = true }
 log = { workspace = true }
 frame = { features = ["experimental", "runtime"], workspace = true }
+sp-runtime = { version = "41.1.0", default-features = false }
+sp-core = { version = "36.1.0", default-features = false }
 
 [dev-dependencies]
 sp-io = { workspace = true, default-features = true }
@@ -29,6 +31,8 @@ std = [
 	"frame/std",
 	"log/std",
 	"scale-info/std",
+	"sp-runtime/std",
+	"sp-core/std",
 ]
 runtime-benchmarks = [
 	"frame/runtime-benchmarks",
