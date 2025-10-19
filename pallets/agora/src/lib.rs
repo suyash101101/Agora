@@ -255,75 +255,7 @@ pub mod pallet {
 		Self::ocw_process_jobs(block_number);
 		}
 	}
-
-	/// Validate unsigned transactions from off-chain workers
-	#[pallet::validate_unsigned]
-	impl<T: Config> ValidateUnsigned for Pallet<T> {
-		type Call = Call<T>;
-
-		fn validate_unsigned(_source: sp_runtime::transaction_validity::TransactionSource, call: &Self::Call) -> TransactionValidity {
-			match call {
-				Call::commit_result { job_id, salt, result_hash: _ } => {
-					// Validate that the job exists and is in the correct phase
-					if let Some(job) = Jobs::<T>::get(*job_id) {
-						if job.status != JobStatus::CommitPhase {
-							return InvalidTransaction::Custom(1).into();
-						}
-						
-						// Check if commit deadline has passed
-						let current_block = frame_system::Pallet::<T>::block_number();
-						if current_block > job.commit_deadline {
-							return InvalidTransaction::Custom(2).into();
-						}
-						
-						// Validate salt format
-						if salt.len() != 32 {
-							return InvalidTransaction::Custom(3).into();
-						}
-						
-						ValidTransaction::with_tag_prefix("agora-commit")
-							.priority(1000)
-							.and_provides((*job_id, *salt))
-							.longevity(64)
-							.propagate(true)
-							.build()
-					} else {
-						InvalidTransaction::Custom(4).into()
-					}
-				},
-				Call::reveal_result { job_id, result } => {
-					// Validate that the job exists and is in the correct phase
-					if let Some(job) = Jobs::<T>::get(*job_id) {
-						if job.status != JobStatus::RevealPhase {
-							return InvalidTransaction::Custom(5).into();
-						}
-						
-						// Check if reveal deadline has passed
-						let current_block = frame_system::Pallet::<T>::block_number();
-						if current_block > job.reveal_deadline {
-							return InvalidTransaction::Custom(6).into();
-						}
-						
-						// Validate result format
-						if result.len() > 2048 {
-							return InvalidTransaction::Custom(7).into();
-						}
-						
-						ValidTransaction::with_tag_prefix("agora-reveal")
-							.priority(1000)
-							.and_provides(*job_id)
-							.longevity(64)
-							.propagate(true)
-							.build()
-					} else {
-						InvalidTransaction::Custom(8).into()
-					}
-				},
-				_ => InvalidTransaction::Call.into(),
-			}
-		}
-	}
-
+	
 	/// Dispatchable functions (extrinsics)
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
