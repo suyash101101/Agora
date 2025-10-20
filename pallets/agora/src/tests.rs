@@ -703,3 +703,299 @@ fn test_ocw_commit_hash_verification() {
 // 2. Manual testing via Polkadot.js Apps
 // 3. The commit-reveal tests above which verify the core cryptographic logic
 
+// =====================================================
+// XCM TESTS
+// =====================================================
+
+#[test]
+fn xcm_job_submission_works() {
+	new_test_ext().execute_with(|| {
+		// Setup: Register a worker
+		assert_ok!(Agora::register_worker(RuntimeOrigin::signed(2), 1000));
+
+		// Simulate XCM job submission from parachain 2000
+		let origin_para_id = 2000;
+		assert_ok!(Agora::xcm_submit_job(
+			RuntimeOrigin::signed(1),
+			1, // Computation job
+			b"hash:test_data".to_vec(),
+			150,
+			origin_para_id
+		));
+
+		// Verify job was created with correct origin para ID
+		let job = Agora::jobs(0).unwrap();
+		assert_eq!(job.origin_para_id, origin_para_id);
+		assert_eq!(job.bounty, 150);
+		assert_eq!(job.creator, 1);
+
+		// Verify event was emitted
+		frame_system::Pallet::<Test>::assert_last_event(
+			Event::XcmJobSubmitted { 
+				job_id: 0, 
+				creator: 1, 
+				bounty: 150,
+				origin_para_id: 2000 
+			}.into()
+		);
+	});
+}
+
+#[test]
+fn xcm_job_submission_fails_with_insufficient_bounty() {
+	new_test_ext().execute_with(|| {
+		// Try to submit job with bounty below minimum
+		assert_noop!(
+			Agora::xcm_submit_job(
+				RuntimeOrigin::signed(1),
+				1,
+				b"hash:test".to_vec(),
+				50, // Below minimum of 100
+				2000
+			),
+			Error::<Test>::InsufficientBounty
+		);
+	});
+}
+
+#[test]
+fn xcm_job_stores_origin_parachain_correctly() {
+	new_test_ext().execute_with(|| {
+		// Register worker
+		assert_ok!(Agora::register_worker(RuntimeOrigin::signed(2), 1000));
+
+		// Submit from different parachains
+		assert_ok!(Agora::xcm_submit_job(
+			RuntimeOrigin::signed(1),
+			1,
+			b"hash:test1".to_vec(),
+			150,
+			1000 // Para 1000
+		));
+
+		assert_ok!(Agora::xcm_submit_job(
+			RuntimeOrigin::signed(1),
+			1,
+			b"hash:test2".to_vec(),
+			150,
+			2000 // Para 2000
+		));
+
+		// Verify both jobs have correct origin
+		assert_eq!(Agora::jobs(0).unwrap().origin_para_id, 1000);
+		assert_eq!(Agora::jobs(1).unwrap().origin_para_id, 2000);
+	});
+}
+
+#[test]
+fn query_job_result_works() {
+	new_test_ext().execute_with(|| {
+		// Setup: Complete a job
+		assert_ok!(Agora::register_worker(RuntimeOrigin::signed(2), 1000));
+		
+		// Submit XCM job
+		assert_ok!(Agora::xcm_submit_job(
+			RuntimeOrigin::signed(1),
+			1,
+			b"hash:test".to_vec(),
+			150,
+			2000 // From para 2000
+		));
+
+		// Progress through phases
+		System::set_block_number(10);
+		run_to_block(11);
+
+		// Commit result
+		let salt: [u8; 32] = [1u8; 32];
+		let result = vec![0x42, 0x43, 0x44];
+		let mut salted_input = Vec::new();
+		salted_input.extend_from_slice(&salt);
+		salted_input.extend_from_slice(&result);
+		let commit_hash = frame::hashing::blake2_256(&salted_input);
+
+		assert_ok!(Agora::commit_result(
+			RuntimeOrigin::signed(2),
+			0,
+			salt,
+			commit_hash
+		));
+
+		// Move to reveal phase
+		run_to_block(32);
+
+		// Reveal result
+		assert_ok!(Agora::reveal_result(
+			RuntimeOrigin::signed(2),
+			0,
+			result.clone()
+		));
+
+		// Finalize job
+		run_to_block(62);
+		assert_ok!(Agora::finalize_job(RuntimeOrigin::signed(1), 0));
+
+		// Now query the result
+		assert_ok!(Agora::query_job_result(
+			RuntimeOrigin::signed(1),
+			0
+		));
+
+		// Verify event was emitted with correct data
+		frame_system::Pallet::<Test>::assert_last_event(
+			Event::JobResultQueried {
+				job_id: 0,
+				result: result.clone(),
+				origin_para_id: 2000
+			}.into()
+		);
+	});
+}
+
+#[test]
+fn query_job_result_fails_for_incomplete_job() {
+	new_test_ext().execute_with(|| {
+		// Setup
+		assert_ok!(Agora::register_worker(RuntimeOrigin::signed(2), 1000));
+		assert_ok!(Agora::xcm_submit_job(
+			RuntimeOrigin::signed(1),
+			1,
+			b"hash:test".to_vec(),
+			150,
+			2000
+		));
+
+		// Try to query before job is completed
+		assert_noop!(
+			Agora::query_job_result(RuntimeOrigin::signed(1), 0),
+			Error::<Test>::InvalidJobPhase
+		);
+	});
+}
+
+#[test]
+fn xcm_job_full_lifecycle() {
+	new_test_ext().execute_with(|| {
+		// This test verifies the complete lifecycle of an XCM job
+		
+		// 1. Register workers
+		assert_ok!(Agora::register_worker(RuntimeOrigin::signed(2), 1000));
+		assert_ok!(Agora::register_worker(RuntimeOrigin::signed(3), 1000));
+
+		// 2. Submit XCM job from para 3000
+		assert_ok!(Agora::xcm_submit_job(
+			RuntimeOrigin::signed(1),
+			1, // Computation
+			b"hash:cross_chain_test".to_vec(),
+			200,
+			3000
+		));
+
+		let job_id = 0;
+		let job = Agora::jobs(job_id).unwrap();
+		assert_eq!(job.origin_para_id, 3000);
+
+		// 3. Workers commit results
+		run_to_block(5);
+		
+		let result = vec![0xAA, 0xBB, 0xCC];
+		let salt1: [u8; 32] = [1u8; 32];
+		let salt2: [u8; 32] = [2u8; 32];
+
+		let mut salted1 = Vec::new();
+		salted1.extend_from_slice(&salt1);
+		salted1.extend_from_slice(&result);
+		let hash1 = frame::hashing::blake2_256(&salted1);
+
+		let mut salted2 = Vec::new();
+		salted2.extend_from_slice(&salt2);
+		salted2.extend_from_slice(&result);
+		let hash2 = frame::hashing::blake2_256(&salted2);
+
+		assert_ok!(Agora::commit_result(RuntimeOrigin::signed(2), job_id, salt1, hash1));
+		assert_ok!(Agora::commit_result(RuntimeOrigin::signed(3), job_id, salt2, hash2));
+
+		// 4. Workers reveal results
+		run_to_block(32);
+		assert_ok!(Agora::reveal_result(RuntimeOrigin::signed(2), job_id, result.clone()));
+		assert_ok!(Agora::reveal_result(RuntimeOrigin::signed(3), job_id, result.clone()));
+
+		// 5. Finalize job
+		run_to_block(62);
+		assert_ok!(Agora::finalize_job(RuntimeOrigin::signed(1), job_id));
+
+		// 6. Verify job is completed and result is stored
+		let completed_job = Agora::jobs(job_id).unwrap();
+		assert_eq!(completed_job.status, crate::JobStatus::Completed);
+		assert_eq!(completed_job.result.to_vec(), result);
+		assert_eq!(completed_job.origin_para_id, 3000);
+
+		// 7. Query result (can be done via XCM from originating chain)
+		assert_ok!(Agora::query_job_result(RuntimeOrigin::signed(1), job_id));
+
+		// Verify all events were emitted correctly
+		let events = frame_system::Pallet::<Test>::events();
+		assert!(events.iter().any(|e| matches!(
+			e.event,
+			RuntimeEvent::Agora(Event::XcmJobSubmitted { job_id: 0, origin_para_id: 3000, .. })
+		)));
+		assert!(events.iter().any(|e| matches!(
+			e.event,
+			RuntimeEvent::Agora(Event::JobFinalized { job_id: 0, .. })
+		)));
+		assert!(events.iter().any(|e| matches!(
+			e.event,
+			RuntimeEvent::Agora(Event::JobResultQueried { job_id: 0, origin_para_id: 3000, .. })
+		)));
+	});
+}
+
+#[test]
+fn local_job_has_zero_origin_para_id() {
+	new_test_ext().execute_with(|| {
+		// Register worker
+		assert_ok!(Agora::register_worker(RuntimeOrigin::signed(2), 1000));
+
+		// Submit regular (non-XCM) job
+		assert_ok!(Agora::submit_job(
+			RuntimeOrigin::signed(1),
+			1,
+			b"hash:local_test".to_vec(),
+			150
+		));
+
+		// Verify local jobs have origin_para_id = 0
+		let job = Agora::jobs(0).unwrap();
+		assert_eq!(job.origin_para_id, 0);
+	});
+}
+
+#[test]
+fn xcm_and_local_jobs_can_coexist() {
+	new_test_ext().execute_with(|| {
+		// Register worker
+		assert_ok!(Agora::register_worker(RuntimeOrigin::signed(2), 1000));
+
+		// Submit local job
+		assert_ok!(Agora::submit_job(
+			RuntimeOrigin::signed(1),
+			1,
+			b"local".to_vec(),
+			150
+		));
+
+		// Submit XCM job
+		assert_ok!(Agora::xcm_submit_job(
+			RuntimeOrigin::signed(1),
+			1,
+			b"xcm".to_vec(),
+			150,
+			2000
+		));
+
+		// Verify both jobs exist with correct origin
+		assert_eq!(Agora::jobs(0).unwrap().origin_para_id, 0); // Local
+		assert_eq!(Agora::jobs(1).unwrap().origin_para_id, 2000); // XCM
+	});
+}
+

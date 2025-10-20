@@ -59,6 +59,10 @@ pub struct Job<T: frame_system::Config> {
 	pub commit_deadline: BlockNumberFor<T>,
 	/// Deadline for reveal phase
 	pub reveal_deadline: BlockNumberFor<T>,
+	/// Optional parachain ID if job submitted via XCM (0 = local chain)
+	pub origin_para_id: u32,
+	/// Actual result bytes (populated after reveal)
+	pub result: BoundedVec<u8, ConstU32<2048>>,
 }
 
 /// Worker information structure

@@ -1,0 +1,53 @@
+[relaychain]
+default_command = "./polkadot"
+default_args = ["-lparachain=debug", "-lxcm=trace"]
+chain = "rococo-local"
+
+[[relaychain.nodes]]
+name = "alice"
+validator = true
+rpc_port = 9944
+ws_port = 9988
+
+[[relaychain.nodes]]
+name = "bob"
+validator = true
+rpc_port = 9945
+ws_port = 9989
+
+# Agora Parachain (Para 1000)
+[[parachains]]
+id = 1000
+cumulus_based = true
+
+[[parachains.collators]]
+name = "agora-1000"
+command = "./target/release/parachain-template-node"
+args = [
+    "--collator",
+    "--force-authoring",
+    "-lparachain=debug",
+    "-lruntime::agora=trace",
+    "-lxcm=trace"
+]
+rpc_port = 9946
+ws_port = 9990
+
+# Second Agora Instance (Para 2000) - For XCM testing
+[[parachains]]
+id = 2000
+cumulus_based = true
+
+[[parachains.collators]]
+name = "agora-2000"
+command = "./target/release/parachain-template-node"
+args = [
+    "--collator",
+    "--force-authoring",
+    "-lparachain=debug",
+    "-lruntime::agora=trace",
+    "-lxcm=trace"
+]
+rpc_port = 9947
+ws_port = 9991
+
