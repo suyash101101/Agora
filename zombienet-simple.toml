@@ -9,20 +9,30 @@ chain = "rococo-local"
 name = "alice"
 validator = true
 rpc_port = 9944
+ws_port = 9944
 
 [[relaychain.nodes]]
 name = "bob"
 validator = true
 rpc_port = 9955
+ws_port = 9955
 
+# First parachain
 [[parachains]]
 id = 1000
 
 [parachains.collator]
 name = "charlie"
 rpc_port = 9988
+ws_port = 9988
 command = "./target/release/parachain-template-node"
-args = ["--collator"]
 
-[metrics]
-enabled = false
+# Second parachain
+[[parachains]]
+id = 2000
+
+[parachains.collator]
+name = "dave"
+rpc_port = 9999
+ws_port = 9999
+command = "./target/release/parachain-template-node"

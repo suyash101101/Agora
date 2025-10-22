@@ -317,7 +317,7 @@ pub mod pallet {
             let current_block = frame_system::Pallet::<T>::block_number();
             let commit_deadline = current_block + T::CommitPhaseDuration::get();
             let reveal_deadline = commit_deadline + T::RevealPhaseDuration::get();
-
+ 
             // Create job
             let job = Job {
                 creator: creator.clone(),
