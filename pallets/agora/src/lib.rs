@@ -857,6 +857,7 @@ pub mod pallet {
             
             // Generate salt and commit hash
             let salt = Self::generate_salt();
+            log::info!("🧂 Generated salt: {:?}", salt);
             let commit_hash_bytes = Self::calculate_commit_hash_bytes(&salt, &computation_result);
             
             // Store execution state
