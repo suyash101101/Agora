@@ -329,9 +329,6 @@ mod runtime {
 	#[runtime::pallet_index(33)]
 	pub type MessageQueue = pallet_message_queue;
 
-	#[runtime::pallet_index(34)]
-	pub type XcmJobClient = pallet_xcm_job_client;
-
 	// Template
 	#[runtime::pallet_index(50)]
 	pub type TemplatePallet = pallet_parachain_template;

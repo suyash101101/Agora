@@ -7,7 +7,6 @@ authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
 edition.workspace = true
-publish = false
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -17,17 +16,15 @@ codec = { features = ["derive"], workspace = true }
 scale-info = { features = ["derive"], workspace = true }
 log = { workspace = true }
 frame = { features = ["experimental", "runtime"], workspace = true }
-sp-core = { version = "38.0.0", default-features = false }
-sp-std = { version = "14.0.0", default-features = false }
-sp-application-crypto = { version = "38.0.0", default-features = false }
-sp-runtime = { version = "39.0.0", default-features = false }
+sp-core = { workspace = true }
+sp-std = { workspace = true }
+sp-application-crypto = { workspace = true }
+sp-runtime = { workspace = true }
 staging-xcm = { workspace = true }
-staging-xcm-builder = { workspace = true }
-staging-xcm-executor = { workspace = true }
 
 [dev-dependencies]
-sp-io = { version = "38.0.0", default-features = true }
-pallet-balances = { version = "41.1.0", default-features = true }
+sp-io = { workspace = true }
+pallet-balances = { workspace = true }
 
 [features]
 default = ["std"]
@@ -41,12 +38,12 @@ std = [
     "sp-application-crypto/std",
     "sp-runtime/std",
     "staging-xcm/std",
-    "staging-xcm-builder/std",
-    "staging-xcm-executor/std",
 ]
 runtime-benchmarks = [
     "frame/runtime-benchmarks",
+    "pallet-balances/runtime-benchmarks",
 ]
 try-runtime = [
     "frame/try-runtime",
+    "pallet-balances/try-runtime",
 ]

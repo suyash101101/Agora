@@ -8,6 +8,7 @@ use codec::{Decode, Encode};
 use sp_std::vec::Vec;
 use staging_xcm::prelude::*;
 use sp_std::vec;
+use staging_xcm::prelude::Weight;
 
 impl<T: Config> Pallet<T> {
 	/// Handle incoming XCM transact for job submission

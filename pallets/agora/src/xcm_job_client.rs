@@ -9,6 +9,7 @@ use sp_std::vec::Vec;
 use staging_xcm::prelude::*;
 use sp_runtime::SaturatedConversion;
 use sp_std::vec;
+use staging_xcm::prelude::Weight;
 
 // Helper functions
 impl<T: Config> Pallet<T> {
