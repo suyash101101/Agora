@@ -11,12 +11,6 @@ validator = true
 rpc_port = 9944
 ws_port = 9944
 
-[[relaychain.nodes]]
-name = "bob"
-validator = true
-rpc_port = 9955
-ws_port = 9955
-
 # First parachain
 [[parachains]]
 id = 1000

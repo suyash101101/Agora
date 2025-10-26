@@ -265,6 +265,7 @@ impl pallet_agora::Config for Runtime {
 	type MaxRevealsPerJob = ConstU32<100>; // Max 100 reveals per job
 	type MaxConcurrentJobsPerAccount = ConstU32<10>; // Max 10 concurrent jobs per account
 	type UnbondingBlocks = ConstU32<100>; // 100 blocks unbonding delay
+	type XcmSender = XcmpQueue;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
@@ -327,6 +328,9 @@ mod runtime {
 	pub type CumulusXcm = cumulus_pallet_xcm;
 	#[runtime::pallet_index(33)]
 	pub type MessageQueue = pallet_message_queue;
+
+	#[runtime::pallet_index(34)]
+	pub type XcmJobClient = pallet_xcm_job_client;
 
 	// Template
 	#[runtime::pallet_index(50)]

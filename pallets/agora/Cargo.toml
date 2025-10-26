@@ -21,6 +21,9 @@ sp-core = { version = "38.0.0", default-features = false }
 sp-std = { version = "14.0.0", default-features = false }
 sp-application-crypto = { version = "38.0.0", default-features = false }
 sp-runtime = { version = "39.0.0", default-features = false }
+staging-xcm = { workspace = true }
+staging-xcm-builder = { workspace = true }
+staging-xcm-executor = { workspace = true }
 
 [dev-dependencies]
 sp-io = { version = "38.0.0", default-features = true }
@@ -37,6 +40,9 @@ std = [
     "sp-std/std",
     "sp-application-crypto/std",
     "sp-runtime/std",
+    "staging-xcm/std",
+    "staging-xcm-builder/std",
+    "staging-xcm-executor/std",
 ]
 runtime-benchmarks = [
     "frame/runtime-benchmarks",
