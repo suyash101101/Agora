@@ -102,21 +102,20 @@ impl Contains<Location> for ParentOrParentsExecutivePlurality {
 }
 
 pub type Barrier = TrailingSetTopicAsId<
-	DenyThenTry<
-		DenyRecursively<DenyReserveTransferToRelayChain>,
-		(
-			TakeWeightCredit,
-			WithComputedOrigin<
-				(
-					AllowTopLevelPaidExecutionFrom<Everything>,
-					AllowExplicitUnpaidExecutionFrom<ParentOrParentsExecutivePlurality>,
-					// ^^^ Parent and its exec plurality get free execution
-				),
-				UniversalLocation,
-				ConstU32<8>,
-			>,
-		),
-	>,
+    DenyThenTry<
+        DenyRecursively<DenyReserveTransferToRelayChain>,
+        (
+            TakeWeightCredit,
+            WithComputedOrigin<
+                (
+                    AllowTopLevelPaidExecutionFrom<Everything>,
+                    AllowExplicitUnpaidExecutionFrom<Everything>, 
+                ),
+                UniversalLocation,
+                ConstU32<8>,
+            >,
+        ),
+    >,
 >;
 
 pub struct XcmConfig;

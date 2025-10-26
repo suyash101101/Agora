@@ -36,10 +36,9 @@ impl<T: Config> Pallet<T> {
 		input: BoundedVec<u8, T::MaxInputBytes>,
 		bounty: u128,
 		_program_hash: <T as frame_system::Config>::Hash,
+		job_id: <T as frame_system::Config>::Hash, // <-- ADD THIS
 	) -> Result<Vec<u8>, DispatchError> {
-		// Pallet index for Agora pallet (check your runtime configuration)
 		let pallet_index: u8 = 51;
-		// Call index for submit_job in Agora pallet
 		let call_index: u8 = 0;
 
 		let mut encoded = Vec::new();
@@ -47,6 +46,7 @@ impl<T: Config> Pallet<T> {
 		encoded.push(call_index);
 		encoded.extend_from_slice(&input.encode());
 		encoded.extend_from_slice(&bounty.encode());
+		encoded.extend_from_slice(&job_id.encode());
 
 		Ok(encoded)
 	}
@@ -131,7 +131,7 @@ impl<T: Config> Pallet<T> {
 		PendingJobs::<T>::insert(job_id, (sender.clone(), dest_para_id, bounty));
 
 		// Encode the remote call (submit_job on destination)
-		let call = Self::encode_submit_job_call(sender.clone(), input.clone(), bounty, program_hash)?;
+		let call = Self::encode_submit_job_call(sender.clone(), input.clone(), bounty, program_hash, job_id)?;
 
 		// Build XCM message
 		let xcm_message = Self::build_job_request_xcm(sender.clone(), bounty, call)?;

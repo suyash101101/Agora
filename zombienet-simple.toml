@@ -11,6 +11,12 @@ validator = true
 rpc_port = 9944
 ws_port = 9944
 
+[[relaychain.nodes]]
+name = "bob"
+validator = true
+rpc_port = 9945
+ws_port = 9945
+
 # First parachain
 [[parachains]]
 id = 1000
@@ -30,3 +36,18 @@ name = "dave"
 rpc_port = 9999
 ws_port = 9999
 command = "./target/release/parachain-template-node"
+
+# --- ADD THIS SECTION ---
+# This opens the channel from 1000 -> 2000
+[[hrmp_channels]]
+sender = 1000
+recipient = 2000
+max_capacity = 8
+max_message_size = 8192
+
+# This opens the channel from 2000 -> 1000
+[[hrmp_channels]]
+sender = 2000
+recipient = 1000
+max_capacity = 8
+max_message_size = 8192

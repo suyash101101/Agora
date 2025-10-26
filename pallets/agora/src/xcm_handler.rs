@@ -26,17 +26,20 @@ impl<T: Config> Pallet<T> {
 			.map_err(|_| Error::<T>::InputDataTooLarge)?;
 		let bounty = u128::decode(&mut cursor)
 			.map_err(|_| Error::<T>::InputDataTooLarge)?;
+
+		let remote_job_id = <T as frame_system::Config>::Hash::decode(&mut cursor)
+        	.map_err(|_| Error::<T>::InputDataTooLarge)?;
+		
+		let local_job_id = Self::do_submit_job(sender.clone(), input, bounty, origin_para_id)?;
+
 		let _program_hash = <T as frame_system::Config>::Hash::decode(&mut cursor)
 			.map_err(|_| Error::<T>::InputDataTooLarge)?;
 		
-		// Create the job using the existing logic
-		let job_id = Self::do_submit_job(sender.clone(), input, bounty, origin_para_id)?;
-		
 		// Store the origin parachain ID so we can send results back
-		RemoteJobOrigins::<T>::insert(job_id, origin_para_id);
+		RemoteJobInfo::<T>::insert(local_job_id, (origin_para_id, remote_job_id));
 		
 		Self::deposit_event(Event::XcmJobSubmitted {
-			job_id,
+			job_id: local_job_id,
 			creator: sender,
 			bounty,
 			origin_para_id,
@@ -48,16 +51,16 @@ impl<T: Config> Pallet<T> {
 	/// Send job result back to origin parachain
 	/// Called when a remote job completes
 	pub fn send_job_result_to_origin(
-		job_id: JobId,
+		local_job_id: JobId,
 		result_hash: <T as frame_system::Config>::Hash,
 		success: bool,
 	) -> DispatchResult {
 		// Get the origin parachain ID
-		let origin_para_id = RemoteJobOrigins::<T>::get(job_id)
-			.ok_or(Error::<T>::JobNotFound)?;
+		let (origin_para_id, remote_job_id) = RemoteJobInfo::<T>::get(local_job_id)
+        	.ok_or(Error::<T>::JobNotFound)?;
 		
 		// Encode result notification call
-		let notification = Self::encode_job_result_notification(job_id, result_hash, success)?;
+		let notification = Self::encode_job_result_notification(remote_job_id, result_hash, success)?;
 		
 		// Build XCM message
 		let message = Xcm(vec![
@@ -82,10 +85,10 @@ impl<T: Config> Pallet<T> {
 			.map_err(|_| Error::<T>::XcmSendFailed)?;
 		
 		// Clean up storage
-		RemoteJobOrigins::<T>::remove(job_id);
+		RemoteJobInfo::<T>::remove(local_job_id);
 		
 		Self::deposit_event(Event::JobResultQueried {
-			job_id,
+			job_id: local_job_id,
 			result: vec![],
 			origin_para_id,
 		});
@@ -96,7 +99,7 @@ impl<T: Config> Pallet<T> {
 	/// Encode the job result notification call for the client parachain
 	/// This creates a call to `receive_remote_job_result` on the Agora pallet
 	fn encode_job_result_notification(
-		job_id: JobId,
+		job_id: <T as frame_system::Config>::Hash,
 		result_hash: <T as frame_system::Config>::Hash,
 		success: bool,
 	) -> Result<Vec<u8>, DispatchError> {
@@ -171,10 +174,10 @@ impl<T: Config> Pallet<T> {
 	/// Check if a job originated from XCM and send results if so
 	/// This should be called after a job completes successfully
 	pub fn maybe_send_remote_result(
-		job_id: JobId, 
+		job_id: JobId, // This is the local numeric ID
 		result_hash: <T as frame_system::Config>::Hash
 	) -> DispatchResult {
-		if RemoteJobOrigins::<T>::contains_key(job_id) {
+		if RemoteJobInfo::<T>::contains_key(job_id) { // <-- Use RemoteJobInfo
 			Self::send_job_result_to_origin(job_id, result_hash, true)?;
 		}
 		Ok(())
@@ -183,8 +186,7 @@ impl<T: Config> Pallet<T> {
 	/// Check if a job originated from XCM and send failure notification
 	/// This should be called if a job fails
 	pub fn maybe_send_remote_failure(job_id: JobId) -> DispatchResult {
-		if RemoteJobOrigins::<T>::contains_key(job_id) {
-			// Use default hash to indicate failure
+		if RemoteJobInfo::<T>::contains_key(job_id) { // <-- Use RemoteJobInfo
 			let zero_hash = <T as frame_system::Config>::Hash::default();
 			Self::send_job_result_to_origin(job_id, zero_hash, false)?;
 		}
