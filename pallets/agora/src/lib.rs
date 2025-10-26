@@ -21,6 +21,9 @@ pub mod types;
 mod functions;
 mod ocw;
 
+pub mod xcm_job_client;
+pub mod xcm_handler;
+
 #[cfg(test)]
 mod mock;
 
@@ -28,6 +31,7 @@ mod mock;
 mod tests;
 
 pub mod weights;
+pub use weights::*;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -96,6 +100,9 @@ pub mod pallet {
         /// Unbonding delay for workers in blocks
         #[pallet::constant]
         type UnbondingBlocks: Get<BlockNumberFor<Self>>;
+
+        /// XCM sender for cross-chain communication
+        type XcmSender: staging_xcm::prelude::SendXcm;
     }
 
     /// Reasons for holding balances
@@ -171,6 +178,18 @@ pub mod pallet {
         OptionQuery,
     >;
 
+    #[pallet::storage]
+    #[pallet::getter(fn pending_jobs)]
+    pub type PendingJobs<T: Config> = StorageMap<_, Blake2_128Concat, <T as frame_system::Config>::Hash, (T::AccountId, u32, u128)>;
+
+    /// Nonce for generating unique job IDs for XCM
+    #[pallet::storage]
+    #[pallet::getter(fn job_nonce)]
+    pub type JobNonce<T: Config> = StorageValue<_, u64, ValueQuery>;
+
+    #[pallet::storage]
+    pub type RemoteJobOrigins<T: Config> = StorageMap<_, Blake2_128Concat, JobId, u32>;
+
     /// Events emitted by the pallet
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -195,6 +214,29 @@ pub mod pallet {
         XcmJobSubmitted { job_id: JobId, creator: <T as frame_system::Config>::AccountId, bounty: u128, origin_para_id: u32 },
         /// A job result has been queried (can be used by XCM response handlers)
         JobResultQueried { job_id: JobId, result: Vec<u8>, origin_para_id: u32 },
+        /// XCM Job Client events
+        /// Remote job request sent via XCM
+        RemoteJobRequested {
+            job_id: <T as frame_system::Config>::Hash,
+            sender: <T as frame_system::Config>::AccountId,
+            dest_para_id: u32,
+            bounty: u128,
+        },
+        /// Remote job completed and result received
+        RemoteJobCompleted {
+            job_id: <T as frame_system::Config>::Hash,
+            result_hash: <T as frame_system::Config>::Hash,
+        },
+        /// Remote job failed
+        RemoteJobFailed {
+            job_id: <T as frame_system::Config>::Hash,
+            reason: Vec<u8>,
+        },
+        /// XCM message sent successfully
+        XcmMessageSent {
+            destination: u32,
+            message_hash: <T as frame_system::Config>::Hash,
+        },
     }
 
     /// Errors that can be returned by the pallet
@@ -242,6 +284,9 @@ pub mod pallet {
         JobCancelled,
         /// Unbonding period not completed
         UnbondingPeriodNotCompleted,
+        /// XCM send failed
+        XcmSendFailed,
+        Overflow,
     }
 
     #[pallet::hooks]
@@ -602,37 +647,5 @@ pub mod pallet {
 
             Ok(())
         }
-    }
-}
-
-/// Weight functions trait
-pub trait WeightInfo {
-    fn submit_job() -> Weight;
-    fn register_worker() -> Weight;
-    fn unregister_worker() -> Weight;
-    fn commit_result() -> Weight;
-    fn reveal_result() -> Weight;
-    fn finalize_job() -> Weight;
-}
-
-/// Default weight implementation
-impl WeightInfo for () {
-    fn submit_job() -> Weight {
-        Weight::from_parts(10_000, 0)
-    }
-    fn register_worker() -> Weight {
-        Weight::from_parts(10_000, 0)
-    }
-    fn unregister_worker() -> Weight {
-        Weight::from_parts(10_000, 0)
-    }
-    fn commit_result() -> Weight {
-        Weight::from_parts(10_000, 0)
-    }
-    fn reveal_result() -> Weight {
-        Weight::from_parts(10_000, 0)
-    }
-    fn finalize_job() -> Weight {
-        Weight::from_parts(50_000, 0)
     }
 }
