@@ -21,6 +21,9 @@ pub mod types;
 mod functions;
 mod ocw;
 
+pub mod xcm_job_client;
+pub mod xcm_handler;
+
 #[cfg(test)]
 mod mock;
 
@@ -28,6 +31,7 @@ mod mock;
 mod tests;
 
 pub mod weights;
+pub use weights::*;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -96,6 +100,9 @@ pub mod pallet {
         /// Unbonding delay for workers in blocks
         #[pallet::constant]
         type UnbondingBlocks: Get<BlockNumberFor<Self>>;
+
+        /// XCM sender for cross-chain communication
+        type XcmSender: staging_xcm::prelude::SendXcm;
     }
 
     /// Reasons for holding balances
@@ -171,6 +178,18 @@ pub mod pallet {
         OptionQuery,
     >;
 
+    #[pallet::storage]
+    #[pallet::getter(fn pending_jobs)]
+    pub type PendingJobs<T: Config> = StorageMap<_, Blake2_128Concat, <T as frame_system::Config>::Hash, (T::AccountId, u32, u128)>;
+
+    /// Nonce for generating unique job IDs for XCM
+    #[pallet::storage]
+    #[pallet::getter(fn job_nonce)]
+    pub type JobNonce<T: Config> = StorageValue<_, u64, ValueQuery>;
+
+    #[pallet::storage]
+    pub type RemoteJobInfo<T: Config> = StorageMap<_, Blake2_128Concat, JobId, (u32, <T as frame_system::Config>::Hash)>;
+
     /// Events emitted by the pallet
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -195,6 +214,29 @@ pub mod pallet {
         XcmJobSubmitted { job_id: JobId, creator: <T as frame_system::Config>::AccountId, bounty: u128, origin_para_id: u32 },
         /// A job result has been queried (can be used by XCM response handlers)
         JobResultQueried { job_id: JobId, result: Vec<u8>, origin_para_id: u32 },
+        /// XCM Job Client events
+        /// Remote job request sent via XCM
+        RemoteJobRequested {
+            job_id: <T as frame_system::Config>::Hash,
+            sender: <T as frame_system::Config>::AccountId,
+            dest_para_id: u32,
+            bounty: u128,
+        },
+        /// Remote job completed and result received
+        RemoteJobCompleted {
+            job_id: <T as frame_system::Config>::Hash,
+            result_hash: <T as frame_system::Config>::Hash,
+        },
+        /// Remote job failed
+        RemoteJobFailed {
+            job_id: <T as frame_system::Config>::Hash,
+            reason: Vec<u8>,
+        },
+        /// XCM message sent successfully
+        XcmMessageSent {
+            destination: u32,
+            message_hash: <T as frame_system::Config>::Hash,
+        },
     }
 
     /// Errors that can be returned by the pallet
@@ -242,6 +284,9 @@ pub mod pallet {
         JobCancelled,
         /// Unbonding period not completed
         UnbondingPeriodNotCompleted,
+        /// XCM send failed
+        XcmSendFailed,
+        Overflow,
     }
 
     #[pallet::hooks]
@@ -514,125 +559,45 @@ pub mod pallet {
             Ok(())
         }
 
-        /// Submit a job via XCM from another parachain
         #[pallet::call_index(6)]
-        #[pallet::weight(Weight::from_parts(10_000, 0) + <T as frame_system::Config>::DbWeight::get().writes(2))]
-        pub fn xcm_submit_job(
+        #[pallet::weight(Weight::from_parts(50_000, 0) + <T as frame_system::Config>::DbWeight::get().reads_writes(5, 5))]
+        pub fn request_remote_job(
             origin: OriginFor<T>,
-            job_type_id: u8,
+            dest_para_id: u32,
             input_data: Vec<u8>,
             bounty: u128,
-            origin_para_id: u32,
+            program_hash: <T as frame_system::Config>::Hash,
         ) -> DispatchResult {
-            let creator = ensure_signed(origin)?;
+            let sender = ensure_signed(origin)?;
 
-            log::info!("🌉 XCM job submission from para {} by {:?}", origin_para_id, creator);
-
-            ensure!(bounty >= T::MinJobBounty::get(), Error::<T>::InsufficientBounty);
-
-            let job_type = match job_type_id {
-                0 => JobType::ApiRequest,
-                1 => JobType::Computation,
-                _ => return Err(Error::<T>::InvalidJobPhase.into()),
-            };
-
-            let bounded_input: BoundedVec<u8, ConstU32<1024>> =
+            // Convert Vec<u8> to BoundedVec
+            let bounded_input: BoundedVec<u8, T::MaxInputBytes> = 
                 input_data.try_into().map_err(|_| Error::<T>::InputDataTooLarge)?;
 
-            let balance = T::Currency::balance(&creator);
-            ensure!(balance >= bounty, Error::<T>::InsufficientBalance);
-
-            T::Currency::hold(&HoldReason::JobBounty.into(), &creator, bounty)?;
-
-            let job_id = NextJobId::<T>::get();
-            NextJobId::<T>::put(job_id + 1);
-
-            let current_block = frame_system::Pallet::<T>::block_number();
-            let commit_deadline = current_block + T::CommitPhaseDuration::get();
-            let reveal_deadline = commit_deadline + T::RevealPhaseDuration::get();
-
-            let job = Job {
-                creator: creator.clone(),
-                bounty,
-                job_type,
-                input_data: bounded_input,
-                status: JobStatus::Pending,
-                created_at: current_block,
-                commit_deadline,
-                reveal_deadline,
-                origin_para_id,
-                result: BoundedVec::default(),
-            };
-
-            Jobs::<T>::insert(job_id, job);
-
-            Self::deposit_event(Event::XcmJobSubmitted { 
-                job_id, 
-                creator, 
-                bounty,
-                origin_para_id,
-            });
-
-            log::info!("✅ XCM job {} created from para {}", job_id, origin_para_id);
-
-            Ok(())
+            // Call your internal logic function
+            Self::do_request_remote_job(
+                sender, 
+                dest_para_id, 
+                bounded_input, 
+                bounty, 
+                program_hash
+            )
         }
 
-        /// Query job result (can be called via XCM)
-        #[pallet::call_index(7)]
-        #[pallet::weight(Weight::from_parts(5_000, 0) + <T as frame_system::Config>::DbWeight::get().reads(2))]
-        pub fn query_job_result(
-            origin: OriginFor<T>,
-            job_id: JobId,
+        /// Receive a job result from a remote parachain (called via XCM)
+        /// NOTE: You will need this for the demo to work
+        #[pallet::call_index(7)] // Make sure this index is unique
+        #[pallet::weight(Weight::from_parts(50_000, 0) + <T as frame_system::Config>::DbWeight::get().reads_writes(5, 5))]
+        pub fn receive_remote_job_result(
+            origin: OriginFor<T>, // This should be an XCM origin
+            job_id: <T as frame_system::Config>::Hash,
+            result_hash: <T as frame_system::Config>::Hash,
+            success: bool,
         ) -> DispatchResult {
-            let _querier = ensure_signed(origin)?;
 
-            let job = Jobs::<T>::get(job_id).ok_or(Error::<T>::JobNotFound)?;
-            ensure!(job.status == JobStatus::Completed, Error::<T>::InvalidJobPhase);
-
-            let result = Results::<T>::get(job_id).ok_or(Error::<T>::JobNotFound)?;
-
-            Self::deposit_event(Event::JobResultQueried { 
-                job_id,
-                result: result.to_vec(),
-                origin_para_id: job.origin_para_id,
-            });
-
-            log::info!("📊 Job {} result queried (origin para: {})", job_id, job.origin_para_id);
-
-            Ok(())
+            ensure_root(origin.clone()).or_else(|_| ensure_signed(origin.clone()).map(|_| ()))?;
+            
+            Self::do_receive_remote_job_result(job_id, result_hash, success)
         }
-    }
-}
-
-/// Weight functions trait
-pub trait WeightInfo {
-    fn submit_job() -> Weight;
-    fn register_worker() -> Weight;
-    fn unregister_worker() -> Weight;
-    fn commit_result() -> Weight;
-    fn reveal_result() -> Weight;
-    fn finalize_job() -> Weight;
-}
-
-/// Default weight implementation
-impl WeightInfo for () {
-    fn submit_job() -> Weight {
-        Weight::from_parts(10_000, 0)
-    }
-    fn register_worker() -> Weight {
-        Weight::from_parts(10_000, 0)
-    }
-    fn unregister_worker() -> Weight {
-        Weight::from_parts(10_000, 0)
-    }
-    fn commit_result() -> Weight {
-        Weight::from_parts(10_000, 0)
-    }
-    fn reveal_result() -> Weight {
-        Weight::from_parts(10_000, 0)
-    }
-    fn finalize_job() -> Weight {
-        Weight::from_parts(50_000, 0)
     }
 }

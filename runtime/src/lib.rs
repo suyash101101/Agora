@@ -171,7 +171,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: alloc::borrow::Cow::Borrowed("parachain-template-runtime"),
 	impl_name: alloc::borrow::Cow::Borrowed("parachain-template-runtime"),
 	authoring_version: 1,
-	spec_version: 1,
+	spec_version: 2,
 	impl_version: 0,
 	apis: apis::RUNTIME_API_VERSIONS,
 	transaction_version: 1,
@@ -265,6 +265,7 @@ impl pallet_agora::Config for Runtime {
 	type MaxRevealsPerJob = ConstU32<100>; // Max 100 reveals per job
 	type MaxConcurrentJobsPerAccount = ConstU32<10>; // Max 10 concurrent jobs per account
 	type UnbondingBlocks = ConstU32<100>; // 100 blocks unbonding delay
+	type XcmSender = XcmpQueue;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.

@@ -50,4 +50,3 @@ args = [
 ]
 rpc_port = 9947
 ws_port = 9991
-

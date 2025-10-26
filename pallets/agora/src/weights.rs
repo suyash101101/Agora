@@ -33,6 +33,10 @@ pub trait WeightInfo {
 	fn commit_result() -> Weight;
 	fn reveal_result() -> Weight;
 	fn finalize_job() -> Weight;
+	// XCM Job Client weights
+	fn request_remote_job() -> Weight;
+	fn receive_remote_job_result() -> Weight;
+	fn cancel_remote_job() -> Weight;
 }
 
 /// Weights for `pallet_agora` using the Substrate node and recommended hardware.
@@ -101,6 +105,29 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(12_u64))
 			.saturating_add(T::DbWeight::get().writes(12_u64))
 	}
+
+	// XCM Job Client weights
+	/// Storage: `XcmJobClient::JobNonce` (r:1 w:1)
+	/// Storage: `XcmJobClient::PendingJobs` (r:0 w:1)
+	fn request_remote_job() -> Weight {
+		Weight::from_parts(100_000_000, 10_000)
+			.saturating_add(T::DbWeight::get().reads(1_u64))
+			.saturating_add(T::DbWeight::get().writes(2_u64))
+	}
+
+	/// Storage: `XcmJobClient::PendingJobs` (r:1 w:1)
+	fn receive_remote_job_result() -> Weight {
+		Weight::from_parts(50_000_000, 5_000)
+			.saturating_add(T::DbWeight::get().reads(1_u64))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
+	}
+
+	/// Storage: `XcmJobClient::PendingJobs` (r:1 w:1)
+	fn cancel_remote_job() -> Weight {
+		Weight::from_parts(30_000_000, 3_000)
+			.saturating_add(T::DbWeight::get().reads(1_u64))
+			.saturating_add(T::DbWeight::get().writes(1_u64))
+	}
 }
 
 // For backwards compatibility and tests.
@@ -123,6 +150,13 @@ impl WeightInfo for () {
 	fn finalize_job() -> Weight {
 		Weight::from_parts(100_000_000, 0)
 	}
+	fn request_remote_job() -> Weight {
+		Weight::from_parts(100_000_000, 10_000)
+	}
+	fn receive_remote_job_result() -> Weight {
+		Weight::from_parts(50_000_000, 5_000)
+	}
+	fn cancel_remote_job() -> Weight {
+		Weight::from_parts(30_000_000, 3_000)
+	}
 }
-
-
