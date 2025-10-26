@@ -12,7 +12,6 @@ members = [
     "pallets/template",
     "pallets/agora",
     "runtime",
-    "pallets/xcm-job-client",
 ]
 resolver = "2"
 
