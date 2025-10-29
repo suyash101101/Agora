@@ -32,23 +32,28 @@ impl<T: Config> Pallet<T> {
 
 	/// Encode submit_job call for remote execution
 	pub fn encode_submit_job_call(
-		_sender: T::AccountId,
+		sender: T::AccountId,
 		input: BoundedVec<u8, T::MaxInputBytes>,
 		bounty: u128,
-		_program_hash: <T as frame_system::Config>::Hash,
-		job_id: <T as frame_system::Config>::Hash, // <-- ADD THIS
+		program_hash: <T as frame_system::Config>::Hash,
+		job_id: <T as frame_system::Config>::Hash,
 	) -> Result<Vec<u8>, DispatchError> {
-		let pallet_index: u8 = 51;
-		let call_index: u8 = 0;
-
-		let mut encoded = Vec::new();
-		encoded.push(pallet_index);
-		encoded.push(call_index);
-		encoded.extend_from_slice(&input.encode());
-		encoded.extend_from_slice(&bounty.encode());
-		encoded.extend_from_slice(&job_id.encode());
-
-		Ok(encoded)
+		// Convert Hash to u8 for job_type_id (using first byte of hash)
+		let job_type_id: u8 = program_hash.as_ref()[0];
+		
+		// Convert BoundedVec to Vec
+		let input_data: Vec<u8> = input.to_vec();
+		
+		// Encode the call with correct types
+		let call = <T as Config>::RuntimeCall::from(
+			Call::<T>::submit_job {
+				job_type_id,    // u8
+				input_data,     // Vec<u8>
+				bounty,         // u128
+			}
+		);
+		
+		Ok(call.encode())
 	}
 
 	/// Build XCM message for job request
@@ -57,28 +62,38 @@ impl<T: Config> Pallet<T> {
 		bounty: u128,
 		call: Vec<u8>,
 	) -> Result<Xcm<()>, DispatchError> {
-		let asset: Asset = (Here, bounty.saturated_into::<u128>()).into();
 
-		let beneficiary = AccountId32 {
-			network: None,
-			id: sender.encode().try_into().unwrap_or([0u8; 32]),
-		};
+		let asset: Asset = (Here, bounty).into();
+
+		let mut sender_bytes = [0u8; 32];
+		let encoded = sender.encode();
+		let len = encoded.len().min(32);
+		sender_bytes[..len].copy_from_slice(&encoded[..len]);
+		
+		let beneficiary = Location::new(
+			0,
+			[AccountId32 { network: None, id: sender_bytes }]
+		);
 
 		let message = Xcm(vec![
-			// Withdraw the bounty from sender's sovereign account
-			WithdrawAsset(asset.clone().into()),
-			// Buy execution on destination
-			BuyExecution { fees: asset.clone(), weight_limit: Unlimited },
-			// Deposit asset to beneficiary (job creator on remote chain)
-			DepositAsset {
-				assets: All.into(),
-				beneficiary: beneficiary.into(),
+			WithdrawAsset(vec![asset.clone()].into()),
+			
+			BuyExecution { 
+				fees: asset, 
+				weight_limit: Unlimited 
 			},
-			// Execute the submit_job call
+			
 			Transact {
 				origin_kind: OriginKind::SovereignAccount,
 				fallback_max_weight: Some(Weight::from_parts(1_000_000_000, 64 * 1024)),
 				call: call.into(),
+			},
+			
+			RefundSurplus,
+			
+			DepositAsset {
+				assets: Wild(All),
+				beneficiary,
 			},
 		]);
 
@@ -124,19 +139,25 @@ impl<T: Config> Pallet<T> {
 		T::Currency::hold(&HoldReason::JobBounty.into(), &sender, bounty)
 			.map_err(|_| Error::<T>::InsufficientBalance)?;
 
-		// Generate unique job ID
+		// Generate unique job ID for tracking
 		let job_id = Self::generate_job_id(&sender, dest_para_id)?;
 
-		// Store pending job
+		// Store pending job locally
 		PendingJobs::<T>::insert(job_id, (sender.clone(), dest_para_id, bounty));
 
 		// Encode the remote call (submit_job on destination)
-		let call = Self::encode_submit_job_call(sender.clone(), input.clone(), bounty, program_hash, job_id)?;
+		let call = Self::encode_submit_job_call(
+			sender.clone(), 
+			input.clone(), 
+			bounty, 
+			program_hash, 
+			job_id
+		)?;
 
 		// Build XCM message
 		let xcm_message = Self::build_job_request_xcm(sender.clone(), bounty, call)?;
 
-		// Send XCM
+		// Send XCM to destination parachain
 		Self::send_xcm_to_parachain(dest_para_id, job_id, xcm_message)?;
 
 		Self::deposit_event(Event::RemoteJobRequested { 

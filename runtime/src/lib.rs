@@ -250,6 +250,13 @@ pub fn native_version() -> NativeVersion {
 	NativeVersion { runtime_version: VERSION, can_author_with: Default::default() }
 }
 
+pub type XcmRouter = (
+	// Use UMP to communicate with the relay chain (if needed)
+	cumulus_primitives_utility::ParentAsUmp<ParachainSystem, PolkadotXcm, ()>,
+	// Use XCMP to communicate with sibling parachains
+	XcmpQueue,
+);
+
 /// Configure the Agora pallet
 impl pallet_agora::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
@@ -265,7 +272,8 @@ impl pallet_agora::Config for Runtime {
 	type MaxRevealsPerJob = ConstU32<100>; // Max 100 reveals per job
 	type MaxConcurrentJobsPerAccount = ConstU32<10>; // Max 10 concurrent jobs per account
 	type UnbondingBlocks = ConstU32<100>; // 100 blocks unbonding delay
-	type XcmSender = XcmpQueue;
+	type XcmSender = XcmRouter;
+	type RuntimeCall = RuntimeCall;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.

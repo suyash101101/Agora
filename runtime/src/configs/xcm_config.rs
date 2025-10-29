@@ -22,12 +22,12 @@ use polkadot_sdk::{
 };
 use xcm::latest::prelude::*;
 use xcm_builder::{
-	AccountId32Aliases, AllowExplicitUnpaidExecutionFrom, AllowTopLevelPaidExecutionFrom,
-	DenyReserveTransferToRelayChain, EnsureXcmOrigin, FixedWeightBounds,
-	FrameTransactionalProcessor, FungibleAdapter, IsConcrete, NativeAsset, ParentIsPreset,
-	RelayChainAsNative, SiblingParachainAsNative, SiblingParachainConvertsVia,
-	SignedAccountId32AsNative, SignedToAccountId32, SovereignSignedViaLocation, TakeWeightCredit,
-	TrailingSetTopicAsId, UsingComponents, WithComputedOrigin, WithUniqueTopic,
+	AccountId32Aliases, AllowExplicitUnpaidExecutionFrom, AllowKnownQueryResponses,
+	AllowSubscriptionsFrom, AllowTopLevelPaidExecutionFrom, AllowUnpaidExecutionFrom,
+	EnsureXcmOrigin, FixedWeightBounds, FrameTransactionalProcessor, FungibleAdapter,
+	IsConcrete, NativeAsset, ParentIsPreset, RelayChainAsNative, SiblingParachainAsNative,
+	SiblingParachainConvertsVia, SignedAccountId32AsNative, SignedToAccountId32,
+	SovereignSignedViaLocation, TakeWeightCredit, UsingComponents, WithUniqueTopic,
 };
 use xcm_executor::XcmExecutor;
 
@@ -38,6 +38,7 @@ parameter_types! {
 	// For the real deployment, it is recommended to set `RelayNetwork` according to the relay chain
 	// and prepend `UniversalLocation` with `GlobalConsensus(RelayNetwork::get())`.
 	pub UniversalLocation: InteriorLocation = Parachain(ParachainInfo::parachain_id().into()).into();
+	pub NativeLocation: Location = Location::here();
 }
 
 /// Type for specifying how a `Location` can be converted into an `AccountId`. This is used
@@ -52,12 +53,17 @@ pub type LocationToAccountId = (
 	AccountId32Aliases<RelayNetwork, AccountId>,
 );
 
+pub type NativeOrRelayAsset = (
+    IsConcrete<NativeLocation>,   // ✅ Accept native parachain token (Here)
+    IsConcrete<RelayLocation>,     // Also accept relay chain token (Parent)
+);
+
 /// Means for transacting assets on this chain.
 pub type LocalAssetTransactor = FungibleAdapter<
 	// Use this currency:
 	Balances,
 	// Use this currency when it is a fungible asset matching the given location or name:
-	IsConcrete<RelayLocation>,
+	NativeOrRelayAsset,
 	// Do a simple punn to convert an AccountId32 Location into a native chain account ID:
 	LocationToAccountId,
 	// Our chain's account ID type (we can't get away without mentioning it explicitly):
@@ -101,22 +107,14 @@ impl Contains<Location> for ParentOrParentsExecutivePlurality {
 	}
 }
 
-pub type Barrier = TrailingSetTopicAsId<
-    DenyThenTry<
-        DenyRecursively<DenyReserveTransferToRelayChain>,
-        (
-            TakeWeightCredit,
-            WithComputedOrigin<
-                (
-                    AllowTopLevelPaidExecutionFrom<Everything>,
-                    AllowExplicitUnpaidExecutionFrom<Everything>, 
-                ),
-                UniversalLocation,
-                ConstU32<8>,
-            >,
-        ),
-    >,
->;
+pub type Barrier = (
+	TakeWeightCredit,
+	AllowTopLevelPaidExecutionFrom<Everything>,
+	AllowUnpaidExecutionFrom<Everything>,
+	AllowExplicitUnpaidExecutionFrom<Everything>,
+	AllowKnownQueryResponses<PolkadotXcm>,
+	AllowSubscriptionsFrom<Everything>,
+);
 
 pub struct XcmConfig;
 impl xcm_executor::Config for XcmConfig {
@@ -131,8 +129,7 @@ impl xcm_executor::Config for XcmConfig {
 	type UniversalLocation = UniversalLocation;
 	type Barrier = Barrier;
 	type Weigher = FixedWeightBounds<UnitWeightCost, RuntimeCall, MaxInstructions>;
-	type Trader =
-		UsingComponents<WeightToFee, RelayLocation, AccountId, Balances, ToAuthor<Runtime>>;
+	type Trader = UsingComponents<WeightToFee, NativeLocation, AccountId, Balances, ToAuthor<Runtime>>;
 	type ResponseHandler = PolkadotXcm;
 	type AssetTrap = PolkadotXcm;
 	type AssetClaims = PolkadotXcm;

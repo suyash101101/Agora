@@ -65,6 +65,8 @@ pub mod pallet {
         /// Weight information for extrinsics in this pallet
         type WeightInfo: WeightInfo;
 
+        type RuntimeCall: From<Call<Self>> + Encode;
+        
         /// Duration of the commit phase in blocks
         #[pallet::constant]
         type CommitPhaseDuration: Get<BlockNumberFor<Self>>;
