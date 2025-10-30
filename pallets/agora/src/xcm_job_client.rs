@@ -30,24 +30,31 @@ impl<T: Config> Pallet<T> {
 		Ok(<T as frame_system::Config>::Hashing::hash_of(&data))
 	}
 
+	/// Get the pallet's holding account for bounties
+    pub fn pallet_account() -> T::AccountId {
+        T::PalletId::get().into_account_truncating()
+    }
+
 	/// Encode submit_job call for remote execution
 	pub fn encode_submit_job_call(
-		_sender: T::AccountId,
+		sender: T::AccountId,
 		input: BoundedVec<u8, T::MaxInputBytes>,
 		bounty: u128,
-		_program_hash: <T as frame_system::Config>::Hash,
-		job_id: <T as frame_system::Config>::Hash, // <-- ADD THIS
+		program_hash: <T as frame_system::Config>::Hash,
+		job_id: <T as frame_system::Config>::Hash,
 	) -> Result<Vec<u8>, DispatchError> {
-		let pallet_index: u8 = 51;
-		let call_index: u8 = 0;
-
+		let input_data: Vec<u8> = input.to_vec();
+		let sender_encoded = sender.encode();
+		
 		let mut encoded = Vec::new();
-		encoded.push(pallet_index);
-		encoded.push(call_index);
-		encoded.extend_from_slice(&input.encode());
+		encoded.push(51);
+		encoded.push(8);
+		encoded.extend_from_slice(&sender_encoded);
+		encoded.extend_from_slice(&input_data.encode());
 		encoded.extend_from_slice(&bounty.encode());
 		encoded.extend_from_slice(&job_id.encode());
-
+		encoded.extend_from_slice(&program_hash.encode());
+		
 		Ok(encoded)
 	}
 
@@ -56,35 +63,42 @@ impl<T: Config> Pallet<T> {
 		sender: T::AccountId,
 		bounty: u128,
 		call: Vec<u8>,
+		dest_para_id: u32,
 	) -> Result<Xcm<()>, DispatchError> {
-		let asset: Asset = (Here, bounty.saturated_into::<u128>()).into();
+		// Asset in local context (Here = this parachain's native token)
+		let asset: Asset = (Here, bounty).into();
 
-		let beneficiary = AccountId32 {
-			network: None,
-			id: sender.encode().try_into().unwrap_or([0u8; 32]),
-		};
+		// Beneficiary on destination (the original sender)
+		let mut sender_bytes = [0u8; 32];
+		let encoded = sender.encode();
+		let len = encoded.len().min(32);
+		sender_bytes[..len].copy_from_slice(&encoded[..len]);
+		
+		let beneficiary = Location::new(
+			0,
+			[AccountId32 { network: None, id: sender_bytes }]
+		);
 
 		let message = Xcm(vec![
-			// Withdraw the bounty from sender's sovereign account
-			WithdrawAsset(asset.clone().into()),
-			// Buy execution on destination
-			BuyExecution { fees: asset.clone(), weight_limit: Unlimited },
-			// Deposit asset to beneficiary (job creator on remote chain)
-			DepositAsset {
-				assets: All.into(),
-				beneficiary: beneficiary.into(),
+			ReserveAssetDeposited(vec![asset.clone()].into()),
+			BuyExecution { 
+				fees: asset, 
+				weight_limit: Unlimited 
 			},
-			// Execute the submit_job call
 			Transact {
 				origin_kind: OriginKind::SovereignAccount,
 				fallback_max_weight: Some(Weight::from_parts(1_000_000_000, 64 * 1024)),
 				call: call.into(),
 			},
+			RefundSurplus,
+			DepositAsset {
+				assets: Wild(All),
+				beneficiary,
+			},
 		]);
 
 		Ok(message)
 	}
-
 	/// Send XCM to destination parachain
 	pub fn send_xcm_to_parachain(
 		para_id: u32,
@@ -120,23 +134,31 @@ impl<T: Config> Pallet<T> {
 			Error::<T>::InsufficientBalance
 		);
 
-		// Reserve the bounty
-		T::Currency::hold(&HoldReason::JobBounty.into(), &sender, bounty)
-			.map_err(|_| Error::<T>::InsufficientBalance)?;
+		T::Currency::hold(&HoldReason::JobBounty.into(), &sender, bounty)?;
 
-		// Generate unique job ID
+		// Generate unique job ID for tracking
 		let job_id = Self::generate_job_id(&sender, dest_para_id)?;
 
-		// Store pending job
+		// Store pending job locally with sender info for refund if needed
 		PendingJobs::<T>::insert(job_id, (sender.clone(), dest_para_id, bounty));
 
 		// Encode the remote call (submit_job on destination)
-		let call = Self::encode_submit_job_call(sender.clone(), input.clone(), bounty, program_hash, job_id)?;
+		let call = Self::encode_submit_job_call(
+			sender.clone(), 
+			input.clone(), 
+			bounty, 
+			program_hash, 
+			job_id
+		)?;
 
-		// Build XCM message
-		let xcm_message = Self::build_job_request_xcm(sender.clone(), bounty, call)?;
+		let xcm_message = Self::build_job_request_xcm(
+			sender.clone(), 
+			bounty, 
+			call,
+			dest_para_id  // Pass destination for proper location handling
+		)?;
 
-		// Send XCM
+		// Send XCM to destination parachain
 		Self::send_xcm_to_parachain(dest_para_id, job_id, xcm_message)?;
 
 		Self::deposit_event(Event::RemoteJobRequested { 
@@ -148,6 +170,7 @@ impl<T: Config> Pallet<T> {
 
 		Ok(())
 	}
+
 
 	/// Receive job result from remote Agora parachain
 	pub fn do_receive_remote_job_result(

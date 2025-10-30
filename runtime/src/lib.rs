@@ -15,6 +15,7 @@ mod weights;
 
 extern crate alloc;
 use alloc::vec::Vec;
+use frame_support::parameter_types;
 use smallvec::smallvec;
 
 use polkadot_sdk::{staging_parachain_info as parachain_info, *};
@@ -250,6 +251,18 @@ pub fn native_version() -> NativeVersion {
 	NativeVersion { runtime_version: VERSION, can_author_with: Default::default() }
 }
 
+pub type XcmRouter = (
+	// Use UMP to communicate with the relay chain (if needed)
+	cumulus_primitives_utility::ParentAsUmp<ParachainSystem, PolkadotXcm, ()>,
+	// Use XCMP to communicate with sibling parachains
+	XcmpQueue,
+);
+
+parameter_types! {
+    pub const AgoraPalletId: frame_support::PalletId = frame_support::PalletId(*b"py/agora");
+}
+
+
 /// Configure the Agora pallet
 impl pallet_agora::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
@@ -265,7 +278,9 @@ impl pallet_agora::Config for Runtime {
 	type MaxRevealsPerJob = ConstU32<100>; // Max 100 reveals per job
 	type MaxConcurrentJobsPerAccount = ConstU32<10>; // Max 10 concurrent jobs per account
 	type UnbondingBlocks = ConstU32<100>; // 100 blocks unbonding delay
-	type XcmSender = XcmpQueue;
+	type RuntimeCall = RuntimeCall;
+	type XcmSender = XcmRouter;
+	type PalletId = AgoraPalletId;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.

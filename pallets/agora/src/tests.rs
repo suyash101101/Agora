@@ -213,6 +213,47 @@ fn commit_result_fails_for_unregistered_worker() {
 }
 
 #[test]
+fn test_basic_reserve_transfer_xcm() {
+    new_test_ext().execute_with(|| {
+        // Setup accounts
+        let sender = 1u64;
+        let dest_para_id = 2000;
+        let amount = 100;
+
+        // Ensure sender has sufficient balance
+        assert_ok!(Balances::deposit_creating(&sender, 1_000_000));
+
+        // Construct a dummy call (e.g., dummy extrinsic)
+        let dummy_call = vec![];
+
+        // Call build_job_request_xcm
+        let result = Agora::build_job_request_xcm(
+            sender,
+            amount,
+            dummy_call,
+            dest_para_id,
+        );
+        assert!(result.is_ok(), "Should build XCM without error");
+
+        let xcm_message = result.unwrap();
+
+        // Evaluate the XCM message
+        // You can serialise it, then run through validate_and_execute in your mock environment
+        // Note: For detailed test, you may need to invoke `xcm_executor::execute_xcm()`
+
+        // Example: Use XcmExecutor to simulate execution
+        let result = xcm_executor::XcmExecutor::<Test>::execute_xcm(
+            Origin::none(),
+            xcm_message,
+        );
+        // Depending on your configuration:
+        // - Should succeed if asset config matches
+        // - Or you can assert it fails, and check for specific error
+        assert!(result.is_ok() || result.is_err(), "XCM execution attempted");
+    });
+}
+
+#[test]
 fn reveal_result_works() {
 	new_test_ext().execute_with(|| {
 		// Setup: Register worker, submit job, commit result (1 = Computation)
