@@ -81,7 +81,6 @@ impl<T: Config> Pallet<T> {
 
 		let message = Xcm(vec![
 			ReserveAssetDeposited(vec![asset.clone()].into()),
-			ClearOrigin,
 			BuyExecution { 
 				fees: asset, 
 				weight_limit: Unlimited 
