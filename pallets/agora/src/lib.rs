@@ -103,6 +103,9 @@ pub mod pallet {
         #[pallet::constant]
         type UnbondingBlocks: Get<BlockNumberFor<Self>>;
 
+         #[pallet::constant]
+        type PalletId: Get<PalletId>;
+
         /// XCM sender for cross-chain communication
         type XcmSender: staging_xcm::prelude::SendXcm;
     }
@@ -600,6 +603,25 @@ pub mod pallet {
             ensure_root(origin.clone()).or_else(|_| ensure_signed(origin.clone()).map(|_| ()))?;
             
             Self::do_receive_remote_job_result(job_id, result_hash, success)
+        }
+
+        /// Handle XCM job submission from remote parachain
+        #[pallet::call_index(8)]
+        #[pallet::weight(Weight::from_parts(50_000, 0) + <T as frame_system::Config>::DbWeight::get().reads_writes(3, 3))]
+        pub fn xcm_handle_job_submission(
+            origin: OriginFor<T>,
+            sender: T::AccountId,
+            input_data: Vec<u8>,
+            bounty: u128,
+            job_id: <T as frame_system::Config>::Hash,
+            program_hash: <T as frame_system::Config>::Hash,
+        ) -> DispatchResult {
+            let _ = origin;  // Accept any origin for XCM passthrough
+            
+            let bounded_input: BoundedVec<u8, T::MaxInputBytes> = 
+                input_data.try_into().map_err(|_| Error::<T>::InputDataTooLarge)?;
+            
+            Self::handle_xcm_job_submission(sender, bounded_input, bounty, job_id, program_hash, 0)
         }
     }
 }

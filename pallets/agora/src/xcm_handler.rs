@@ -12,31 +12,19 @@ use staging_xcm::prelude::Weight;
 
 impl<T: Config> Pallet<T> {
 	/// Handle incoming XCM transact for job submission
+
 	/// This is called when a remote parachain sends a job request via XCM
 	pub fn handle_xcm_job_submission(
 		sender: T::AccountId,
-		encoded_params: Vec<u8>,
+		input: BoundedVec<u8, T::MaxInputBytes>,
+		bounty: u128,
+		job_id: <T as frame_system::Config>::Hash,
+		program_hash: <T as frame_system::Config>::Hash,
 		origin_para_id: u32,
 	) -> DispatchResult {
-		// Decode the call parameters
-		// Format: [input, bounty, program_hash]
-		let mut cursor = &encoded_params[..];
-		
-		let input = BoundedVec::<u8, T::MaxInputBytes>::decode(&mut cursor)
-			.map_err(|_| Error::<T>::InputDataTooLarge)?;
-		let bounty = u128::decode(&mut cursor)
-			.map_err(|_| Error::<T>::InputDataTooLarge)?;
-
-		let remote_job_id = <T as frame_system::Config>::Hash::decode(&mut cursor)
-        	.map_err(|_| Error::<T>::InputDataTooLarge)?;
-		
 		let local_job_id = Self::do_submit_job(sender.clone(), input, bounty, origin_para_id)?;
-
-		let _program_hash = <T as frame_system::Config>::Hash::decode(&mut cursor)
-			.map_err(|_| Error::<T>::InputDataTooLarge)?;
 		
-		// Store the origin parachain ID so we can send results back
-		RemoteJobInfo::<T>::insert(local_job_id, (origin_para_id, remote_job_id));
+		RemoteJobInfo::<T>::insert(local_job_id, (origin_para_id, job_id));
 		
 		Self::deposit_event(Event::XcmJobSubmitted {
 			job_id: local_job_id,
