@@ -4,7 +4,7 @@ Agora is a Polkadot parachain template extended with a verifiable computation ma
 
 ### Why Agora
 - Trusted hardware (e.g., SGX) has vulnerabilities; pure OCWs are untrusted. Agora uses crypto‑economic incentives and majority agreement to create a Schelling point for correctness.
-- Works across parachains: submit from chain A, compute on chain B, return verified result via XCM.
+- Cross chain compatibility via XCM.
 
 ### App Workflow
 
@@ -42,7 +42,7 @@ Prereqs: Rust toolchain (nightly as per `rust-toolchain.toml`), wasm32 target, N
 
 ```bash
 # From repo root
-cargo build --release -p node
+ cargo build --release -p parachain-template-node --bin parachain-template-node
 
 # Optional: install the collator binary somewhere on PATH
 sudo cp target/release/parachain-template-node /usr/local/bin/
@@ -57,7 +57,7 @@ This repo includes `zombienet-xcm.toml` to boot a relay chain (rococo‑local) a
 
 ```bash
 # Example with zombienet (ensure you have it installed)
-zombienet spawn zombienet-xcm.toml
+zombienet -p native spawn zombienet-xcm.toml
 ```
 
 Key ports (from `zombienet-xcm.toml`):
@@ -77,8 +77,7 @@ node JS/setup-hrmp.js
 The script performs:
 - Funds sovereign accounts (relay and cross‑parachain)
 - Opens HRMP channels 1000 ↔ 2000 using XCM `Transact`
-- Sends `agora.requestRemoteJob` on Para 1000 to Para 2000
-- Waits for execution and verifies job creation and events on Para 2000
+- Debug.js to verify the status of the parachains.
 
 ## Agora Pallet – On‑Chain API
 
@@ -89,8 +88,6 @@ Extrinsics (selected):
 - `agora.revealResult(job_id, result)` – Reveal phase; pallet verifies salted hash
 - `agora.finalizeJob(job_id)` – Finalizes by consensus (auto‑finalization also runs in `on_initialize`)
 - `agora.requestRemoteJob(dest_para_id, input_data, bounty, program_hash)` – Send cross‑para job via XCM
-- `agora.receiveRemoteJobResult(job_id_hash, result_hash, success)` – Called via XCM by the executor chain
-- `agora.xcmHandleJobSubmission(sender, input_data, bounty, job_id_hash, program_hash)` – XCM entrypoint to accept jobs
 
 Events include job submission, commits/reveals, finalization, rewards/slashing, and XCM‑related notifications.
 
@@ -100,8 +97,6 @@ Storage highlights:
 Consensus and rewards:
 - Majority of reveals determine the canonical result.
 - Honest workers split the bounty; dishonest workers lose reputation and have stake reduced.
-
-
 
 ## Off‑Chain Worker (OCW)
 
@@ -142,11 +137,4 @@ Harden for production:
 - XCM not delivered: ensure HRMP channels 1000 ↔ 2000 are open (relay `hrmpChannels`), and sovereign accounts funded.
 - Insufficient balance/errors: adjust `UNIT`/bounty values or fund accounts via balances pallet.
 - OCW not revealing: ensure commit deadline passed and reveal is within the reveal window.
-- Pallet index/call index in XCM encode must match the runtime (here, `Agora` at index 51 for this template).
-
-## Security Notes
-
-- This template is for development. Many XCM filters are permissive.
-- OCW HTTP is simulated and not a secure oracle. For production, implement authenticated requests, verification, and anti‑spam.
-
-
+- Pallet index/call index in XCM encode must match the runtime (here, `Agora` at index 51 for this template)
