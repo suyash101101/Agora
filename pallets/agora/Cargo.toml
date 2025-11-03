@@ -21,6 +21,7 @@ sp-std = { workspace = true }
 sp-application-crypto = { workspace = true }
 sp-runtime = { workspace = true }
 staging-xcm = { workspace = true }
+polkadot-sdk = { workspace = true }
 
 [dev-dependencies]
 sp-io = { workspace = true }
@@ -38,6 +39,7 @@ std = [
     "sp-application-crypto/std",
     "sp-runtime/std",
     "staging-xcm/std",
+    "polkadot-sdk/std",
 ]
 runtime-benchmarks = [
     "frame/runtime-benchmarks",

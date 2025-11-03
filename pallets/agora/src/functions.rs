@@ -228,6 +228,23 @@ impl<T: Config> Pallet<T> {
             result: consensus_result.to_vec(),
         });
 
+        log::info!("🔍 Job {} finalized, checking if remote job", job_id);
+    
+        if RemoteJobInfo::<T>::contains_key(job_id) {
+            log::info!("📤 Job {} is remote, sending result back via XCM", job_id);
+            
+            match Self::maybe_send_remote_result(job_id, consensus_result.clone()) {
+                Ok(_) => {
+                    log::info!("✅ Successfully sent remote result for job {}", job_id);
+                },
+                Err(e) => {
+                    log::error!("❌ Failed to send remote result for job {}: {:?}", job_id, e);
+                }
+            }
+        } else {
+            log::info!("📍 Job {} is local, no XCM message needed", job_id);
+        }
+
         Ok(())
     }
 

@@ -40,6 +40,7 @@ use alloc::vec::Vec;
 use frame::prelude::*;
 use frame::traits::fungible::{Inspect, Mutate, MutateHold};
 use types::*;
+use polkadot_sdk::cumulus_primitives_core::ParaId;
 
 #[frame::pallet]
 pub mod pallet {
@@ -108,6 +109,8 @@ pub mod pallet {
 
         /// XCM sender for cross-chain communication
         type XcmSender: staging_xcm::prelude::SendXcm;
+
+        type ParaId: Get<ParaId>;
     }
 
     /// Reasons for holding balances
@@ -230,7 +233,7 @@ pub mod pallet {
         /// Remote job completed and result received
         RemoteJobCompleted {
             job_id: <T as frame_system::Config>::Hash,
-            result_hash: <T as frame_system::Config>::Hash,
+            result: Vec<u8>,
         },
         /// Remote job failed
         RemoteJobFailed {
@@ -540,7 +543,7 @@ pub mod pallet {
 
             let mut job = Jobs::<T>::get(job_id).ok_or(Error::<T>::JobNotFound)?;
             ensure!(job.status != JobStatus::Completed, Error::<T>::JobAlreadyFinalized);
-
+            log::info!("🏁 Attempting to finalize job {}", job_id);
             let current_block = frame_system::Pallet::<T>::block_number();
             ensure!(current_block > job.reveal_deadline, Error::<T>::InvalidJobPhase);
 
@@ -561,6 +564,12 @@ pub mod pallet {
                 result: consensus_result.to_vec(),
             });
 
+            if let Err(e) = Self::maybe_send_remote_result(job_id, consensus_result.clone()) {
+                log::error!("❌ Failed to send remote result: {:?}", e);
+            } else {
+                log::info!("✅ Remote result handling completed");
+            }
+
             Ok(())
         }
 
@@ -574,7 +583,7 @@ pub mod pallet {
             program_hash: <T as frame_system::Config>::Hash,
         ) -> DispatchResult {
             let sender = ensure_signed(origin)?;
-
+            let origin_para_id = u32::from(T::ParaId::get());
             // Convert Vec<u8> to BoundedVec
             let bounded_input: BoundedVec<u8, T::MaxInputBytes> = 
                 input_data.try_into().map_err(|_| Error::<T>::InputDataTooLarge)?;
@@ -585,24 +594,24 @@ pub mod pallet {
                 dest_para_id, 
                 bounded_input, 
                 bounty, 
-                program_hash
+                program_hash,
+                origin_para_id
             )
         }
 
         /// Receive a job result from a remote parachain (called via XCM)
         /// NOTE: You will need this for the demo to work
-        #[pallet::call_index(7)] // Make sure this index is unique
+        #[pallet::call_index(7)]
         #[pallet::weight(Weight::from_parts(50_000, 0) + <T as frame_system::Config>::DbWeight::get().reads_writes(5, 5))]
         pub fn receive_remote_job_result(
-            origin: OriginFor<T>, // This should be an XCM origin
+            origin: OriginFor<T>,
             job_id: <T as frame_system::Config>::Hash,
-            result_hash: <T as frame_system::Config>::Hash,
+            result: Vec<u8>,
             success: bool,
         ) -> DispatchResult {
-
             ensure_root(origin.clone()).or_else(|_| ensure_signed(origin.clone()).map(|_| ()))?;
             
-            Self::do_receive_remote_job_result(job_id, result_hash, success)
+            Self::do_receive_remote_job_result(job_id, result, success)
         }
 
         /// Handle XCM job submission from remote parachain
@@ -615,13 +624,14 @@ pub mod pallet {
             bounty: u128,
             job_id: <T as frame_system::Config>::Hash,
             program_hash: <T as frame_system::Config>::Hash,
+            origin_para_id: u32,
         ) -> DispatchResult {
             let _ = origin;  // Accept any origin for XCM passthrough
             
             let bounded_input: BoundedVec<u8, T::MaxInputBytes> = 
                 input_data.try_into().map_err(|_| Error::<T>::InputDataTooLarge)?;
             
-            Self::handle_xcm_job_submission(sender, bounded_input, bounty, job_id, program_hash, 0)
+            Self::handle_xcm_job_submission(sender, bounded_input, bounty, job_id, program_hash, origin_para_id)
         }
     }
 }
