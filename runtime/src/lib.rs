@@ -281,6 +281,7 @@ impl pallet_agora::Config for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type XcmSender = XcmRouter;
 	type PalletId = AgoraPalletId;
+	type ParaId = ParachainInfo;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.

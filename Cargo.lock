@@ -8152,6 +8152,7 @@ dependencies = [
  "log",
  "pallet-balances",
  "parity-scale-codec",
+ "polkadot-sdk 2503.2.0",
  "polkadot-sdk-frame",
  "scale-info",
  "sp-application-crypto",

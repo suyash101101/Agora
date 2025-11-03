@@ -40,6 +40,7 @@ use alloc::vec::Vec;
 use frame::prelude::*;
 use frame::traits::fungible::{Inspect, Mutate, MutateHold};
 use types::*;
+use polkadot_sdk::cumulus_primitives_core::ParaId;
 
 #[frame::pallet]
 pub mod pallet {
@@ -108,6 +109,8 @@ pub mod pallet {
 
         /// XCM sender for cross-chain communication
         type XcmSender: staging_xcm::prelude::SendXcm;
+
+        type ParaId: Get<ParaId>;
     }
 
     /// Reasons for holding balances
@@ -574,7 +577,7 @@ pub mod pallet {
             program_hash: <T as frame_system::Config>::Hash,
         ) -> DispatchResult {
             let sender = ensure_signed(origin)?;
-
+            let origin_para_id = u32::from(T::ParaId::get());
             // Convert Vec<u8> to BoundedVec
             let bounded_input: BoundedVec<u8, T::MaxInputBytes> = 
                 input_data.try_into().map_err(|_| Error::<T>::InputDataTooLarge)?;
@@ -585,7 +588,8 @@ pub mod pallet {
                 dest_para_id, 
                 bounded_input, 
                 bounty, 
-                program_hash
+                program_hash,
+                origin_para_id
             )
         }
 
@@ -615,13 +619,14 @@ pub mod pallet {
             bounty: u128,
             job_id: <T as frame_system::Config>::Hash,
             program_hash: <T as frame_system::Config>::Hash,
+            origin_para_id: u32,
         ) -> DispatchResult {
             let _ = origin;  // Accept any origin for XCM passthrough
             
             let bounded_input: BoundedVec<u8, T::MaxInputBytes> = 
                 input_data.try_into().map_err(|_| Error::<T>::InputDataTooLarge)?;
             
-            Self::handle_xcm_job_submission(sender, bounded_input, bounty, job_id, program_hash, 0)
+            Self::handle_xcm_job_submission(sender, bounded_input, bounty, job_id, program_hash, origin_para_id)
         }
     }
 }

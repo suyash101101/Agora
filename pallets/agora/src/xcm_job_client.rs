@@ -42,6 +42,7 @@ impl<T: Config> Pallet<T> {
 		bounty: u128,
 		program_hash: <T as frame_system::Config>::Hash,
 		job_id: <T as frame_system::Config>::Hash,
+		origin_para_id: u32,
 	) -> Result<Vec<u8>, DispatchError> {
 		let input_data: Vec<u8> = input.to_vec();
 		let sender_encoded = sender.encode();
@@ -54,6 +55,7 @@ impl<T: Config> Pallet<T> {
 		encoded.extend_from_slice(&bounty.encode());
 		encoded.extend_from_slice(&job_id.encode());
 		encoded.extend_from_slice(&program_hash.encode());
+		encoded.extend_from_slice(&origin_para_id.encode());
 		
 		Ok(encoded)
 	}
@@ -64,6 +66,7 @@ impl<T: Config> Pallet<T> {
 		bounty: u128,
 		call: Vec<u8>,
 		dest_para_id: u32,
+		
 	) -> Result<Xcm<()>, DispatchError> {
 		// Asset in local context (Here = this parachain's native token)
 		let asset: Asset = (Here, bounty).into();
@@ -127,6 +130,7 @@ impl<T: Config> Pallet<T> {
 		input: BoundedVec<u8, T::MaxInputBytes>,
 		bounty: u128,
 		program_hash: <T as frame_system::Config>::Hash,
+		origin_para_id: u32,
 	) -> DispatchResult {
 		// Ensure sender has enough balance
 		ensure!(
@@ -148,14 +152,15 @@ impl<T: Config> Pallet<T> {
 			input.clone(), 
 			bounty, 
 			program_hash, 
-			job_id
+			job_id,
+			origin_para_id
 		)?;
 
 		let xcm_message = Self::build_job_request_xcm(
 			sender.clone(), 
 			bounty, 
 			call,
-			dest_para_id  // Pass destination for proper location handling
+			dest_para_id
 		)?;
 
 		// Send XCM to destination parachain
