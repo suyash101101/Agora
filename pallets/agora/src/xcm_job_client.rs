@@ -180,7 +180,7 @@ impl<T: Config> Pallet<T> {
 	/// Receive job result from remote Agora parachain
 	pub fn do_receive_remote_job_result(
 		job_id: <T as frame_system::Config>::Hash,
-		result_hash: <T as frame_system::Config>::Hash,
+		result: Vec<u8>,
 		success: bool,
 	) -> DispatchResult {
 		// Get pending job info
@@ -198,7 +198,7 @@ impl<T: Config> Pallet<T> {
 
 			Self::deposit_event(Event::RemoteJobCompleted { 
 				job_id, 
-				result_hash 
+				result 
 			});
 		} else {
 			// Job failed, return the reserved bounty
