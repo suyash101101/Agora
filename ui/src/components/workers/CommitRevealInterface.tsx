@@ -6,6 +6,7 @@ import { generateSalt, hashResult, generateCommitHash } from '../../utils/helper
 import { stringToBytes, bytesToString } from '../../utils/formatters';
 import { formatBalance, formatAddress } from '../../utils/formatters';
 import { JobStatus } from '../../utils/constants';
+import { signAndSend } from '../../utils/signer';
 import { Send, Loader, Eye, EyeOff } from 'lucide-react';
 
 export function CommitRevealInterface() {
@@ -61,9 +62,14 @@ export function CommitRevealInterface() {
     try {
       setIsCommitting(true);
       const signer = await getSigner(account.address);
-      const tx = api.tx.agora.commitResult(selectedJobId, Array.from(salt), commitHash);
+      if (!signer) {
+        alert('No signer available');
+        setIsCommitting(false);
+        return;
+      }
       
-      await tx.signAndSend(account.address, { signer }, ({ status }) => {
+      const tx = api.tx.agora.commitResult(selectedJobId, Array.from(salt), commitHash);
+      await signAndSend(tx, signer, account.address, ({ status }) => {
         if (status.isInBlock) {
           loadCommits(selectedJobId);
           setResult('');
@@ -96,10 +102,15 @@ export function CommitRevealInterface() {
     try {
       setIsRevealing(true);
       const signer = await getSigner(account.address);
+      if (!signer) {
+        alert('No signer available');
+        setIsRevealing(false);
+        return;
+      }
+      
       const resultBytes = stringToBytes(result);
       const tx = api.tx.agora.revealResult(selectedJobId, Array.from(resultBytes));
-      
-      await tx.signAndSend(account.address, { signer }, ({ status }) => {
+      await signAndSend(tx, signer, account.address, ({ status }) => {
         if (status.isInBlock) {
           loadReveals(selectedJobId);
           setResult('');

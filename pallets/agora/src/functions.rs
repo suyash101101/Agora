@@ -213,10 +213,6 @@ impl<T: Config> Pallet<T> {
         // Store final result
         Results::<T>::insert(job_id, consensus_result.clone());
 
-        // If the job originated via XCM, send the result hash back to the origin parachain
-        let result_hash = <T as frame_system::Config>::Hashing::hash_of(&consensus_result.to_vec());
-        let _ = Self::maybe_send_remote_result(job_id, result_hash);
-
         // Update job status
         let mut updated_job = job.clone();
         updated_job.status = JobStatus::Completed;

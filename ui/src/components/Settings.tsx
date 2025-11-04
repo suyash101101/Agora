@@ -40,9 +40,9 @@ export function Settings() {
               onChange={(e) => setEndpoint(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
-              <option value={DEFAULT_ENDPOINTS.para1000}>Para 1000 (ws://localhost:9990)</option>
-              <option value={DEFAULT_ENDPOINTS.para2000}>Para 2000 (ws://localhost:9991)</option>
-              <option value={DEFAULT_ENDPOINTS.relay}>Relay (ws://localhost:9988)</option>
+              <option value={DEFAULT_ENDPOINTS.para1000}>Para 1000 (ws://127.0.0.1:9946)</option>
+              <option value={DEFAULT_ENDPOINTS.para2000}>Para 2000 (ws://127.0.0.1:9947)</option>
+              <option value={DEFAULT_ENDPOINTS.relay}>Relay (ws://127.0.0.1:9944)</option>
             </select>
             <input
               type="text"

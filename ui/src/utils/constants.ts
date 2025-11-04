@@ -12,9 +12,9 @@ export const BLOCK_TIME_MS = 6000; // 6 seconds
 
 // Default WebSocket endpoints
 export const DEFAULT_ENDPOINTS = {
-  para1000: 'ws://localhost:9990',
-  para2000: 'ws://localhost:9991',
-  relay: 'ws://localhost:9988',
+  para1000: 'ws://127.0.0.1:9946',
+  para2000: 'ws://127.0.0.1:9947',
+  relay: 'ws://127.0.0.1:9944',
 } as const;
 
 export const DEFAULT_ENDPOINT = DEFAULT_ENDPOINTS.para1000;
