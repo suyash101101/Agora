@@ -7,7 +7,7 @@ Verifiable Off‑Chain Computation via Commit‑Reveal and XCM
   <img src="assets/Screenshot%202025-11-04%20at%207.31.33%E2%80%AFPM.png" alt="Agora Logo" width="200" />
 </p>
  
- ## System
+ ## System Architecture
 
 ![System Architecture](assets/WhatsApp%20Image%202025-11-04%20at%2020.18.35.jpg)
 
@@ -20,9 +20,9 @@ Agora is a Polkadot parachain template extended with a verifiable computation ma
 - Flexible execution off‑chain: leverage OCWs and external infrastructure for low‑latency IO and scalable compute.
 - Deterministic on‑chain settlement: rewards, slashing, and consensus resolution are transparent and reproducible.
 
-### Live Demo
+### Live Walkthough
+[![Watch Agora Walk Through](https://app.supademo.com/api/thumbnail/cm6xuj2sr01o8pegv3s411vap)](https://app.supademo.com/embed/cm6xuj2sr01o8pegv3s411vap)
 
-<div style="position: relative; box-sizing: content-box; max-height: 80vh; max-height: 80svh; width: 100%; aspect-ratio: 1.6; padding: 40px 0 40px 0;"><iframe src="https://app.supademo.com/embed/cm6xuj2sr01o8pegv3s411vap?embed_v=2&utm_source=embed" loading="lazy" title="Agora" allow="clipboard-write" frameborder="0" webkitallowfullscreen="true" mozallowfullscreen="true" allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe></div>
 
 ### App Workflow
 
