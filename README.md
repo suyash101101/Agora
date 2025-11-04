@@ -21,7 +21,7 @@ Agora is a Polkadot parachain template extended with a verifiable computation ma
 - Deterministic on‑chain settlement: rewards, slashing, and consensus resolution are transparent and reproducible.
 
 ### Live Walkthough
-[![Watch Agora Walk Through](https://app.supademo.com/api/thumbnail/cm6xuj2sr01o8pegv3s411vap)](https://app.supademo.com/embed/cm6xuj2sr01o8pegv3s411vap)
+[Watch Agora Walk Through](https://app.supademo.com/demo/cm6xuj2sr01o8pegv3s411vap)
 
 
 ### App Workflow
