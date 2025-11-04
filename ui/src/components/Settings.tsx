@@ -5,7 +5,7 @@ import { Wifi, Save } from 'lucide-react';
 
 export function Settings() {
   const { reconnect } = useApiContext();
-  const [endpoint, setEndpoint] = useState(DEFAULT_ENDPOINTS.para1000);
+  const [endpoint, setEndpoint] = useState<string>(DEFAULT_ENDPOINTS.para1000);
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
