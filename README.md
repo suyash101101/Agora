@@ -1,14 +1,27 @@
 ## Agora Parachain Template – Verifiable Off‑Chain Computation via Commit‑Reveal and XCM
 
-Agora is a Polkadot parachain template extended with a verifiable computation marketplace. It enables parachains to outsource off‑chain jobs (API fetches, computations) to a network of staked workers. Results are verified on‑chain using a crypto‑economic commit‑reveal game. Cross‑parachain requests and result delivery use XCM.
+
+
+![Agora Logo](assets/Screenshot%202025-11-04%20at%207.31.33%E2%80%AFPM.png)
+
+![System Architecture](assets/WhatsApp%20Image%202025-11-04%20at%2020.18.35.jpg)
+
+Agora is a Polkadot parachain template extended with a verifiable computation marketplace. It enables parachains to outsource off‑chain jobs (API fetches, computations) to a network of staked workers. Results are verified on‑chain using a crypto‑economic commit‑reveal game. Cross‑parachain requests and result delivery use XCM. This instance has been obtained with paraid 5024 on the Paseo test network.
 
 ### Why Agora
-- Trusted hardware (e.g., SGX) has vulnerabilities; pure OCWs are untrusted. Agora uses crypto‑economic incentives and majority agreement to create a Schelling point for correctness.
-- Cross chain compatibility via XCM.
+- Verifiable correctness without trusted hardware: commit–reveal with on‑chain verification ensures results are independently checkable.
+- Decentralized worker marketplace: staked workers compete to execute jobs; dishonest actors are slashed, honest majority is rewarded.
+- XCM‑native interoperability: submit from one parachain, execute on another, and receive results back seamlessly.
+- Flexible execution off‑chain: leverage OCWs and external infrastructure for low‑latency IO and scalable compute.
+- Deterministic on‑chain settlement: rewards, slashing, and consensus resolution are transparent and reproducible.
 
 ### App Workflow
 
 ![App Workflow](assets/App_Workflow.png)
+
+#### XCM Flow (cross‑parachain request and result delivery)
+
+![XCM Workflow](assets/XCM_Workflow.png)
 
 ## High‑Level Architecture
 
@@ -106,20 +119,6 @@ Consensus and rewards:
 - Generates salted commits and logs ready‑to‑submit `commitResult`/`revealResult` transactions.
 - Automation of signed extrinsic submission can be enabled in future work.
 
-![OCW Workflow](assets/OCW_Workflow.png)
-
-## XCM Flow (Request → Execute → Deliver)
-
-1) Chain A calls `agora.requestRemoteJob(B, input, bounty, program_hash)`
-   - Reserves bounty locally; builds XCM with `Transact` to Chain B `xcmHandleJobSubmission`.
-2) Chain B creates a local job, holds bounty on sender’s account, emits `XcmJobSubmitted`.
-3) Workers execute, commit, reveal; pallet finalizes with consensus.
-4) Upon finalization, the pallet computes the result hash and calls `maybe_send_remote_result`,
-   which sends an XCM `Transact` back to Chain A `receiveRemoteJobResult(...)`.
-5) Chain A releases local hold and emits `RemoteJobCompleted` or `RemoteJobFailed`.
-
-![XCM Workflow](assets/XCM_Workflow.png)
-
 ## Configuration and Parameters
 
 Runtime (`runtime/src/lib.rs`) sets:
@@ -131,10 +130,3 @@ Harden for production:
 - Restrict XCM execute/send filters; require paid execution with proper fee trading
 - Tighten `LocationToAccountId` conversions and origins
 - Replace simulated OCW HTTP with a secure, signed, and verifiable approach
-
-## Troubleshooting
-
-- XCM not delivered: ensure HRMP channels 1000 ↔ 2000 are open (relay `hrmpChannels`), and sovereign accounts funded.
-- Insufficient balance/errors: adjust `UNIT`/bounty values or fund accounts via balances pallet.
-- OCW not revealing: ensure commit deadline passed and reveal is within the reveal window.
-- Pallet index/call index in XCM encode must match the runtime (here, `Agora` at index 51 for this template)
