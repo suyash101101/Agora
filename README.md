@@ -1,4 +1,5 @@
-## Agora Parachain Template – Verifiable Off‑Chain Computation via Commit‑Reveal and XCM
+# Agora 
+Verifiable Off‑Chain Computation via Commit‑Reveal and XCM
 
  
 
@@ -6,6 +7,8 @@
   <img src="assets/Screenshot%202025-11-04%20at%207.31.33%E2%80%AFPM.png" alt="Agora Logo" width="200" />
 </p>
  
+ ## System
+
 ![System Architecture](assets/WhatsApp%20Image%202025-11-04%20at%2020.18.35.jpg)
 
 Agora is a Polkadot parachain template extended with a verifiable computation marketplace. It enables parachains to outsource off‑chain jobs (API fetches, computations) to a network of staked workers. Results are verified on‑chain using a crypto‑economic commit‑reveal game. Cross‑parachain requests and result delivery use XCM. This instance has been obtained with paraid 5024 on the Paseo test network.
