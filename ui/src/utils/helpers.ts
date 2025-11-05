@@ -1,18 +1,60 @@
 import { randomAsU8a } from '@polkadot/util-crypto';
-import { blake2AsHex } from '@polkadot/util-crypto';
-import { u8aConcat, u8aToHex } from '@polkadot/util';
+import { blake2AsHex, blake2AsU8a } from '@polkadot/util-crypto';
+import { u8aConcat, u8aToHex, hexToU8a } from '@polkadot/util';
 
+/**
+ * Generate a random 32-byte salt for commit-reveal scheme
+ */
 export function generateSalt(): Uint8Array {
   return randomAsU8a(32);
 }
 
+/**
+ * Hash salt + result using Blake2-256 (same as runtime)
+ * Returns hex string for display
+ */
 export function hashResult(salt: Uint8Array, result: Uint8Array): string {
   const combined = u8aConcat(salt, result);
   return blake2AsHex(combined, 256);
 }
 
+/**
+ * Generate commit hash from salt and result
+ * Returns hex string for display
+ */
 export function generateCommitHash(salt: Uint8Array, result: Uint8Array): string {
   return hashResult(salt, result);
+}
+
+/**
+ * Generate commit hash bytes (Uint8Array) for API submission
+ * This matches the runtime's blake2_256(salt + result) calculation
+ */
+export function generateCommitHashBytes(salt: Uint8Array, result: Uint8Array): Uint8Array {
+  const combined = u8aConcat(salt, result);
+  return blake2AsU8a(combined, 256);
+}
+
+/**
+ * Convert hex string hash to Hash type for API
+ * Polkadot.js API accepts hex strings and converts them automatically
+ */
+export function hashHexToHash(hex: string): string {
+  // Ensure it starts with 0x and is properly formatted
+  if (!hex.startsWith('0x')) {
+    return `0x${hex}`;
+  }
+  return hex;
+}
+
+/**
+ * Ensure salt is exactly 32 bytes
+ */
+export function ensureSalt32Bytes(salt: Uint8Array): Uint8Array {
+  if (salt.length !== 32) {
+    throw new Error(`Salt must be exactly 32 bytes, got ${salt.length}`);
+  }
+  return salt;
 }
 
 export function validateJobInput(input: string, maxBytes: number = 1024): { valid: boolean; error?: string } {

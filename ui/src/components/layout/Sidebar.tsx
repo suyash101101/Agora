@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Briefcase, Users, Settings, PlusCircle, Eye } from 'lucide-react';
+import { Home, Briefcase, Users, Settings, PlusCircle, Eye, Hash } from 'lucide-react';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: Home },
@@ -8,6 +8,7 @@ const navigation = [
   { name: 'Submit Job', href: '/jobs/submit', icon: PlusCircle },
   { name: 'Workers', href: '/workers', icon: Users },
   { name: 'Commit/Reveal', href: '/workers/commit-reveal', icon: Eye },
+  { name: 'Hash Generator', href: '/hash-generator', icon: Hash },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 

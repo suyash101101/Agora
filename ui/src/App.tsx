@@ -9,6 +9,7 @@ import { JobDetail } from './components/jobs/JobDetail';
 import { SubmitJobForm } from './components/jobs/SubmitJobForm';
 import { WorkerDashboard } from './components/workers/WorkerDashboard';
 import { CommitRevealInterface } from './components/workers/CommitRevealInterface';
+import { HashGenerator } from './components/common/HashGenerator';
 import { Settings } from './components/Settings';
 import { NotFound } from './components/NotFound';
 import { DEFAULT_ENDPOINT } from './utils/constants';
@@ -26,6 +27,7 @@ function App() {
               <Route path="/jobs/submit" element={<SubmitJobForm />} />
               <Route path="/workers" element={<WorkerDashboard />} />
               <Route path="/workers/commit-reveal" element={<CommitRevealInterface />} />
+              <Route path="/hash-generator" element={<HashGenerator />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

@@ -30,6 +30,18 @@ export function useJobs(api: ApiPromise | null) {
       const commitsData = await api.query.agora.commits(jobId);
       if ((commitsData as any).isSome) {
         const commitsList = (commitsData as any).unwrap().toArray() as any[];
+        // Log salt extraction for debugging
+        commitsList.forEach((commit, idx) => {
+          console.log(`🔍 Commit ${idx} salt extraction:`, {
+            salt: commit.salt,
+            saltType: typeof commit.salt,
+            saltConstructor: commit.salt?.constructor?.name,
+            saltToU8a: commit.salt?.toU8a?.(),
+            saltToHex: commit.salt?.toHex?.(),
+            saltIsArray: Array.isArray(commit.salt),
+            saltIsUint8Array: commit.salt instanceof Uint8Array,
+          });
+        });
         setCommits(prev => new Map(prev).set(jobId, commitsList));
       }
     } catch (error) {
