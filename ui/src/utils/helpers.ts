@@ -1,21 +1,41 @@
 import { randomAsU8a } from '@polkadot/util-crypto';
 import { blake2AsHex, blake2AsU8a } from '@polkadot/util-crypto';
-import { u8aConcat, u8aToHex, hexToU8a } from '@polkadot/util';
+import { u8aConcat, u8aToHex, hexToU8a, compactToU8a } from '@polkadot/util';
 
 /**
  * Generate a random 32-byte salt for commit-reveal scheme
  */
-export function generateSalt(): Uint8Array {
-  return randomAsU8a(32);
+export function generateSalt(): string {
+      const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}|;:,.<>?';
+      let saltString = '';
+      const randomBytes = new Uint8Array(32);
+      crypto.getRandomValues(randomBytes);
+      
+      for (let i = 0; i < 32; i++) {
+        saltString += chars[randomBytes[i] % chars.length];
+      }
+      
+      return saltString;
 }
 
 /**
- * Hash salt + result using Blake2-256 (same as runtime)
+ * Hash salt + result using Blake2-256 with SCALE encoding (matches Substrate runtime)
  * Returns hex string for display
+ * 
+ * This matches the Rust implementation:
+ * 1. Concatenate salt + result
+ * 2. SCALE encode the Vec<u8> (adds compact length prefix)
+ * 3. Blake2b-256 hash the encoded data
  */
 export function hashResult(salt: Uint8Array, result: Uint8Array): string {
+  // Concatenate salt + result
   const combined = u8aConcat(salt, result);
-  return blake2AsHex(combined, 256);
+  
+  // SCALE encode: compact length prefix + data
+  const lengthPrefix = compactToU8a(combined.length);
+  const encoded = u8aConcat(lengthPrefix, combined);
+  
+  return blake2AsHex(encoded, 256);
 }
 
 /**
@@ -28,11 +48,17 @@ export function generateCommitHash(salt: Uint8Array, result: Uint8Array): string
 
 /**
  * Generate commit hash bytes (Uint8Array) for API submission
- * This matches the runtime's blake2_256(salt + result) calculation
+ * This matches the runtime's blake2_256(SCALE_encode(salt + result)) calculation
  */
 export function generateCommitHashBytes(salt: Uint8Array, result: Uint8Array): Uint8Array {
+  // Concatenate salt + result
   const combined = u8aConcat(salt, result);
-  return blake2AsU8a(combined, 256);
+  
+  // SCALE encode: compact length prefix + data
+  const lengthPrefix = compactToU8a(combined.length);
+  const encoded = u8aConcat(lengthPrefix, combined);
+  
+  return blake2AsU8a(encoded, 256);
 }
 
 /**
@@ -110,4 +136,3 @@ export function isJobInRevealPhase(currentBlock: number, commitDeadline: number,
 export function canFinalizeJob(currentBlock: number, revealDeadline: number): boolean {
   return currentBlock > revealDeadline;
 }
-

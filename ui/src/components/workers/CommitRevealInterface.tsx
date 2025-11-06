@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { useApiContext } from '../../context/ApiContext';
 import { useAccountContext } from '../../context/AccountContext';
 import { useJobs } from '../../hooks/useJobs';
-import { generateSalt, generateCommitHash, generateCommitHashBytes, ensureSalt32Bytes, hashHexToHash } from '../../utils/helpers';
+import { generateCommitHash, ensureSalt32Bytes, hashHexToHash } from '../../utils/helpers';
 import { stringToBytes } from '../../utils/formatters';
 import { formatBalance } from '../../utils/formatters';
 import { JobStatus } from '../../utils/constants';
 import { signAndSend } from '../../utils/signer';
-import { Loader, Eye, EyeOff, Copy, Check } from 'lucide-react';
+import { Loader, Eye, EyeOff, Copy, Check, RefreshCw } from 'lucide-react';
+
 
 export function CommitRevealInterface() {
   const { api } = useApiContext();
@@ -21,6 +22,8 @@ export function CommitRevealInterface() {
   const [isCommitting, setIsCommitting] = useState(false);
   const [isRevealing, setIsRevealing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [saltAscii, setSaltAscii] = useState<string>('');
+
 
   React.useEffect(() => {
     if (api) {
@@ -29,6 +32,7 @@ export function CommitRevealInterface() {
       });
     }
   }, [api]);
+
 
   const availableJobs = Array.from(jobs.entries()).filter(([jobId, job]) => {
     const jobCommits = commits.get(jobId) || [];
@@ -45,17 +49,41 @@ export function CommitRevealInterface() {
     return false;
   });
 
+
+  const handleGenerateSalt = () => {
+    // Generate random salt with printable ASCII characters (a-z, A-Z, 0-9, special chars)
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}|;:,.<>?';
+    let saltString = '';
+    const randomBytes = new Uint8Array(32);
+    crypto.getRandomValues(randomBytes);
+    
+    for (let i = 0; i < 32; i++) {
+      saltString += chars[randomBytes[i] % chars.length];
+    }
+    
+    const newSalt = stringToBytes(saltString);
+    setSalt(newSalt);
+    setSaltAscii(saltString);
+    setCommitHash(null);
+  };
+
+
   const handleGenerateCommit = () => {
     if (!result.trim()) {
       alert('Please enter a result first');
       return;
     }
-    const newSalt = generateSalt();
+    if (!salt) {
+      alert('Please generate a salt first');
+      return;
+    }
+    
     const resultBytes = stringToBytes(result);
-    const hash = generateCommitHash(newSalt, resultBytes);
-    setSalt(newSalt);
+    const hash = generateCommitHash(salt, resultBytes);
+    
     setCommitHash(hash);
   };
+
 
   const handleCopyHash = async () => {
     if (!commitHash) return;
@@ -68,8 +96,10 @@ export function CommitRevealInterface() {
     }
   };
 
+
   const handleCommit = async () => {
     if (!api || !account || !selectedJobId || !salt || !commitHash) return;
+
 
     try {
       setIsCommitting(true);
@@ -81,7 +111,6 @@ export function CommitRevealInterface() {
       const saltArray = Array.from(salt32);
       
       // Convert commit hash hex string to proper format
-      // The API expects a Hash type, which can be created from hex string
       const hashHex = hashHexToHash(commitHash);
       
       console.log('🔐 Committing result:', {
@@ -92,6 +121,7 @@ export function CommitRevealInterface() {
         commitHashLength: hashHex.length,
       });
 
+
       const signer = await getSigner(account.address);
       if (!signer) {
         alert('No signer available');
@@ -100,8 +130,6 @@ export function CommitRevealInterface() {
       }
       
       // API expects: commitResult(jobId, salt: [u8; 32], result_hash: Hash)
-      // salt should be passed as array of 32 bytes
-      // hash should be passed as hex string (API will convert to Hash type)
       const tx = api.tx.agora.commitResult(selectedJobId, saltArray, hashHex);
       
       await signAndSend(tx, signer, account.address, ({ status, events }) => {
@@ -111,7 +139,6 @@ export function CommitRevealInterface() {
           const blockHash = status.asInBlock.toString();
           console.log('📦 Commit transaction in block:', blockHash);
           
-          // Check for errors
           const failed = events.find(e => e.event.method === 'ExtrinsicFailed');
           if (failed) {
             console.error('❌ Commit transaction failed:', failed);
@@ -120,7 +147,6 @@ export function CommitRevealInterface() {
             return;
           }
           
-          // Check for success event
           const committed = events.find(e => 
             e.event.section === 'agora' && e.event.method === 'ResultCommitted'
           );
@@ -148,17 +174,18 @@ export function CommitRevealInterface() {
             return;
           }
           
-          setResult('');
-          setSalt(null);
-          setCommitHash(null);
-          setIsCommitting(false);
-          
           // Store the committed result in localStorage for later retrieval
           if (selectedJobId !== null) {
             const storageKey = `agora_commit_${selectedJobId}_${account.address}`;
             localStorage.setItem(storageKey, result);
             console.log('💾 Stored committed result in localStorage:', storageKey);
           }
+          
+          setResult('');
+          setSalt(null);
+          setCommitHash(null);
+          setSaltAscii('');
+          setIsCommitting(false);
           
           alert(`Commit submitted successfully!\n\nBlock: ${blockHash}\n\nCheck Polkadot.js Apps to verify.`);
         }
@@ -170,8 +197,10 @@ export function CommitRevealInterface() {
     }
   };
 
+
   const handleReveal = async () => {
     if (!api || !account || !selectedJobId || !result.trim()) return;
+
 
     const jobCommits = commits.get(selectedJobId);
     const myCommit = jobCommits?.find(c => c.worker.toString() === account.address);
@@ -181,16 +210,13 @@ export function CommitRevealInterface() {
       return;
     }
 
+
     try {
       setIsRevealing(true);
       
       const resultBytes = stringToBytes(result);
       
-      // Verify the hash locally before submitting
-      const { generateCommitHashBytes } = await import('../../utils/helpers');
-      const { u8aConcat } = await import('@polkadot/util');
-      
-      // Get salt from commit (it's stored as Uint8Array in the commit)
+      // Get salt from commit
       const commitSalt = myCommit.salt;
       let saltU8a: Uint8Array;
       
@@ -199,27 +225,9 @@ export function CommitRevealInterface() {
       } else if (Array.isArray(commitSalt)) {
         saltU8a = Uint8Array.from(commitSalt);
       } else {
-        // Try to convert from hex or other formats
         saltU8a = new Uint8Array(32);
         console.warn('Unexpected salt format:', commitSalt);
       }
-      
-      // Calculate hash locally to verify
-      const calculatedHash = generateCommitHashBytes(saltU8a, resultBytes);
-      const committedHash = myCommit.resultHash;
-      
-      console.log('🔍 Verifying reveal:', {
-        jobId: selectedJobId,
-        resultLength: resultBytes.length,
-        result: Array.from(resultBytes),
-        saltLength: saltU8a.length,
-        salt: Array.from(saltU8a),
-        calculatedHash: Array.from(calculatedHash),
-        committedHash: committedHash.toString(),
-      });
-      
-      // Note: We can't directly compare hashes here because committedHash is a Hash type
-      // The runtime will verify it, but we can warn the user if format looks wrong
       
       const signer = await getSigner(account.address);
       if (!signer) {
@@ -238,12 +246,10 @@ export function CommitRevealInterface() {
           const blockHash = status.asInBlock.toString();
           console.log('📦 Reveal transaction in block:', blockHash);
           
-          // Check for errors
           const failed = events.find(e => e.event.method === 'ExtrinsicFailed');
           if (failed) {
             console.error('❌ Reveal transaction failed:', failed);
             
-            // Extract detailed error information
             let errorMessage = 'Reveal transaction failed';
             try {
               const errorData = failed.event.data;
@@ -267,7 +273,6 @@ export function CommitRevealInterface() {
                 
                 console.error(`Module Index: ${moduleIndex}, Error Index: ${errorIndex}`);
                 
-                // Map error index to error name
                 const errorNames: Record<number, string> = {
                   0: 'JobNotFound',
                   1: 'WorkerNotRegistered',
@@ -286,7 +291,7 @@ export function CommitRevealInterface() {
                   14: 'InsufficientBalance',
                   15: 'WorkerUnbonding',
                   16: 'TooManyConcurrentJobs',
-                  17: 'SaltVerificationFailed', // This is the likely error!
+                  17: 'SaltVerificationFailed',
                   18: 'AlreadyRevealed',
                   19: 'JobCancelled',
                   20: 'UnbondingPeriodNotCompleted',
@@ -302,7 +307,6 @@ export function CommitRevealInterface() {
                   errorMessage = `Error: agora.${errorName}`;
                 }
                 
-                // Try to decode using API
                 if (api) {
                   try {
                     const errorMeta = api.registry.findMetaError({ 
@@ -336,7 +340,6 @@ export function CommitRevealInterface() {
             return;
           }
           
-          // Check for success event
           const revealed = events.find(e => 
             e.event.section === 'agora' && e.event.method === 'ResultRevealed'
           );
@@ -376,6 +379,7 @@ export function CommitRevealInterface() {
     }
   };
 
+
   if (!account) {
     return (
       <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -384,6 +388,7 @@ export function CommitRevealInterface() {
     );
   }
 
+
   const selectedJob = selectedJobId !== null ? jobs.get(selectedJobId) : null;
   const selectedJobCommits = selectedJobId !== null ? commits.get(selectedJobId) || [] : [];
   const selectedJobReveals = selectedJobId !== null ? reveals.get(selectedJobId) || [] : [];
@@ -391,6 +396,7 @@ export function CommitRevealInterface() {
   const canCommit = selectedJob && (selectedJob.status.toString() === JobStatus.Pending || selectedJob.status.toString() === JobStatus.CommitPhase) && !hasCommitted;
   const canReveal = selectedJob && selectedJob.status.toString() === JobStatus.RevealPhase && hasCommitted && !selectedJobReveals.some(r => r.worker.toString() === account.address);
   const myCommit = selectedJobId !== null ? selectedJobCommits.find(c => c.worker.toString() === account.address) : null;
+
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -414,6 +420,7 @@ export function CommitRevealInterface() {
         </select>
       </div>
 
+
       {selectedJob && (
         <div className="space-y-4">
           <div className="bg-gray-50 p-4 rounded-lg">
@@ -429,6 +436,7 @@ export function CommitRevealInterface() {
             <p className="font-medium">Block {selectedJob.revealDeadline.toString()}</p>
           </div>
 
+
           {canCommit && (
             <div className="space-y-4">
               <div>
@@ -437,26 +445,51 @@ export function CommitRevealInterface() {
                 </label>
                 <textarea
                   value={result}
-                  onChange={(e) => setResult(e.target.value)}
+                  onChange={(e) => {
+                    setResult(e.target.value);
+                    setCommitHash(null);
+                  }}
                   placeholder="Enter job result..."
                   rows={4}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
               </div>
-              <button
-                onClick={handleGenerateCommit}
-                className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-              >
-                Generate Commit Hash
-              </button>
+
+              {/* Step 1: Generate Salt */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Step 1: Generate Salt
+                </label>
+                <button
+                  onClick={handleGenerateSalt}
+                  className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors flex items-center justify-center gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Generate Random Salt
+                </button>
+              </div>
+
               {salt && (
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-1">Salt (32 bytes)</p>
-                  <p className="font-mono text-sm break-all">
-                    0x{Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('')}
-                  </p>
+                  <p className="text-xs text-gray-500 mb-1">Salt (32 bytes ASCII)</p>
+                  <p className="font-mono text-sm break-all">{saltAscii}</p>
                 </div>
               )}
+
+              {/* Step 2: Generate Hash */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Step 2: Generate Commit Hash
+                </label>
+                <button
+                  onClick={handleGenerateCommit}
+                  disabled={!salt || !result.trim()}
+                  className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Generate Commit Hash
+                </button>
+              </div>
+
               {commitHash && (
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <div className="flex items-center justify-between">
@@ -478,6 +511,8 @@ export function CommitRevealInterface() {
                   </div>
                 </div>
               )}
+
+              {/* Step 3: Submit Commit */}
               <button
                 onClick={handleCommit}
                 disabled={isCommitting || !commitHash || !salt}
@@ -491,12 +526,13 @@ export function CommitRevealInterface() {
                 ) : (
                   <>
                     <EyeOff className="w-5 h-5" />
-                    <span>Commit Result</span>
+                    <span>Step 3: Commit Result</span>
                   </>
                 )}
               </button>
             </div>
           )}
+
 
           {canReveal && (
             <div className="space-y-4">

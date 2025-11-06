@@ -6,10 +6,11 @@ import { useAccountContext } from '../../context/AccountContext';
 import { formatBalance, formatAddress, bytesToString, stringToBytes } from '../../utils/formatters';
 import { JOB_STATUS_COLORS, JOB_TYPE_LABELS, JobStatus, JobType } from '../../utils/constants';
 import { canFinalizeJob } from '../../utils/helpers';
-import { generateSalt, generateCommitHash, generateCommitHashBytes, ensureSalt32Bytes, hashHexToHash } from '../../utils/helpers';
+import { generateSalt, hashResult } from '../../utils/helpers';
 import { signAndSend } from '../../utils/signer';
 import { Loader, ArrowLeft, CheckCircle, Eye, EyeOff, Copy, Check } from 'lucide-react';
 import { hexToU8a } from '@polkadot/util';
+
 
 export function JobDetail() {
   const { id } = useParams<{ id: string }>();
@@ -20,19 +21,21 @@ export function JobDetail() {
   const [currentBlock, setCurrentBlock] = React.useState<number>(0);
   const [isFinalizing, setIsFinalizing] = React.useState(false);
   
-  // Commit/Reveal state
+  // Commit/Reveal state - salt is now just a hex string
   const [result, setResult] = useState('');
-  const [salt, setSalt] = useState<Uint8Array | null>(null);
-  const [commitHash, setCommitHash] = useState<string | null>(null);
+  const [saltHex, setSaltHex] = useState<string>(''); // Changed from Uint8Array to string
+  const [commitHash, setCommitHash] = useState<string>('');
   const [isCommitting, setIsCommitting] = useState(false);
   const [isRevealing, setIsRevealing] = useState(false);
   const [copied, setCopied] = useState(false);
+
 
   const jobId = id ? parseInt(id, 10) : -1;
   const job = jobs.get(jobId);
   const jobCommits = commits.get(jobId) || [];
   const jobReveals = reveals.get(jobId) || [];
   const jobResult = results.get(jobId);
+
 
   React.useEffect(() => {
     if (api && jobId >= 0) {
@@ -45,6 +48,7 @@ export function JobDetail() {
       });
     }
   }, [api, jobId, loadJob, loadCommits, loadReveals]);
+
 
   // Check if user can commit or reveal
   const myCommit = jobCommits.find(c => c.worker.toString() === account?.address);
@@ -63,17 +67,22 @@ export function JobDetail() {
     currentBlock > job.commitDeadline.toNumber() &&
     currentBlock <= job.revealDeadline.toNumber();
 
+
   const handleGenerateCommit = () => {
     if (!result.trim()) {
       alert('Please enter a result first');
       return;
     }
-    const newSalt = generateSalt();
-    const resultBytes = stringToBytes(result);
-    const hash = generateCommitHash(newSalt, resultBytes);
-    setSalt(newSalt);
-    setCommitHash(hash);
+    
+    // Generate salt and keep as Uint8Array initially
+    const salt = generateSalt();
+    setSaltHex(salt);
+
+    const resultHash = hashResult(salt, stringToBytes(result));
+    setCommitHash(resultHash);
+    
   };
+
 
   const handleCopyHash = async () => {
     if (!commitHash) return;
@@ -86,18 +95,21 @@ export function JobDetail() {
     }
   };
 
+
   const handleCommit = async () => {
-    if (!api || !account || !salt || !commitHash) return;
+    if (!api || !account || !saltHex || !commitHash) return;
+
 
     try {
       setIsCommitting(true);
       
-      const salt32 = ensureSalt32Bytes(salt);
+      // Convert hex string to byte array for transaction
+      const saltBytes = Uint8Array.from(
+        saltHex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16))
+      );
+      const salt32 = ensureSalt32Bytes(saltBytes);
       const saltArray = Array.from(salt32);
       const hashHex = hashHexToHash(commitHash);
-      
-      // Convert salt to hex string for storage
-      const saltHex = Array.from(salt32).map(b => b.toString(16).padStart(2, '0')).join('');
       
       console.log('🔐 Committing result:', {
         jobId,
@@ -108,6 +120,7 @@ export function JobDetail() {
         result: result,
         resultLength: result.length,
       });
+
 
       const signer = await getSigner(account.address);
       if (!signer) {
@@ -138,7 +151,7 @@ export function JobDetail() {
             return;
           }
           
-          // Store result AND salt in localStorage for reveal
+          // Store result AND salt hex in localStorage for reveal
           const storageKey = `agora_commit_${jobId}_${account.address}`;
           const saltKey = `agora_salt_${jobId}_${account.address}`;
           localStorage.setItem(storageKey, result);
@@ -152,8 +165,8 @@ export function JobDetail() {
           });
           
           setResult('');
-          setSalt(null);
-          setCommitHash(null);
+          setSaltHex('');
+          setCommitHash('');
           setIsCommitting(false);
           loadJob(jobId);
           loadCommits(jobId);
@@ -167,21 +180,23 @@ export function JobDetail() {
     }
   };
 
+
   const handleReveal = async () => {
     if (!api || !account || !result.trim()) return;
+
 
     if (!myCommit) {
       alert('You must commit first before revealing');
       return;
     }
 
+
     try {
       setIsRevealing(true);
       
       const resultBytes = stringToBytes(result);
       
-      // CRITICAL: Query commit directly from chain RIGHT BEFORE revealing
-      // This ensures we use the EXACT same salt the runtime will use
+      // Query commit directly from chain to get exact salt
       console.log('🔍 Querying commit directly from chain to get exact salt...');
       const directCommit = await api.query.agora.commits(jobId);
       if (!(directCommit as any).isSome) {
@@ -204,11 +219,11 @@ export function JobDetail() {
       console.log('🔍 Direct commit from chain:', myDirectCommit);
       console.log('🔍 Direct commit salt:', myDirectCommit.salt);
       
-      // Extract salt from the direct commit query - this is the EXACT salt stored on-chain
+      // Extract salt from the direct commit query
       const directSalt = myDirectCommit.salt;
-      let saltU8a: Uint8Array;
+      let saltU8a: Uint8Array | null = null;
       
-      // Try toHuman() first - most reliable for fixed arrays
+      // Try toHuman() first
       if (directSalt?.toHuman && typeof directSalt.toHuman === 'function') {
         const saltHuman = directSalt.toHuman();
         console.log('🔍 toHuman() returned:', saltHuman);
@@ -232,15 +247,12 @@ export function JobDetail() {
         console.log('🔍 toU8a() returned:', saltBytes, 'type:', typeof saltBytes, 'length:', saltBytes?.length);
         
         if (saltBytes instanceof Uint8Array) {
-          // For fixed arrays, toU8a() might return exactly 32 bytes or more
           if (saltBytes.length === 32) {
             saltU8a = saltBytes;
           } else if (saltBytes.length > 32) {
-            // Might be encoded - try last 32 bytes
             saltU8a = saltBytes.slice(-32);
             console.log('✅ Extracted last 32 bytes from toU8a()');
           } else {
-            // Too short - pad it
             const padded = new Uint8Array(32);
             padded.set(saltBytes);
             saltU8a = padded;
@@ -272,7 +284,7 @@ export function JobDetail() {
         console.log('✅ Extracted salt from toHex()');
       }
       
-      // Final check - ensure we have a valid salt
+      // Final check
       if (!saltU8a || saltU8a.length !== 32) {
         console.error('❌ Failed to extract valid salt from chain commit');
         console.error('  Direct salt:', directSalt);
@@ -283,8 +295,13 @@ export function JobDetail() {
         return;
       }
       
+      // Convert to hex string for comparison
+      const chainSaltHex = Array.from(saltU8a)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+      
       console.log('🔑 Final salt extracted from chain:', {
-        saltHex: Array.from(saltU8a).map(b => b.toString(16).padStart(2, '0')).join(''),
+        saltHex: chainSaltHex,
         saltBytes: Array.from(saltU8a),
         saltLength: saltU8a.length,
       });
@@ -293,23 +310,21 @@ export function JobDetail() {
       const saltKey = `agora_salt_${jobId}_${account.address}`;
       const storedSaltHex = localStorage.getItem(saltKey);
       if (storedSaltHex && storedSaltHex.length === 64) {
-        const storedSalt = Uint8Array.from(
-          storedSaltHex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16))
-        );
-        const match = saltU8a.length === storedSalt.length && saltU8a.every((b, i) => b === storedSalt[i]);
+        const match = chainSaltHex === storedSaltHex;
         if (match) {
           console.log('✅ Chain salt matches localStorage salt');
         } else {
           console.warn('⚠️ Chain salt does NOT match localStorage salt! Using chain salt.');
-          console.warn('  Chain salt:', Array.from(saltU8a).map(b => b.toString(16).padStart(2, '0')).join(''));
-          console.warn('  Stored salt:', Array.from(storedSalt).map(b => b.toString(16).padStart(2, '0')).join(''));
+          console.warn('  Chain salt:', chainSaltHex);
+          console.warn('  Stored salt:', storedSaltHex);
         }
       }
       
       // Calculate hash locally for verification
+      const { generateCommitHashBytes } = await import('../../utils/helpers');
       const calculatedHash = generateCommitHashBytes(saltU8a, resultBytes);
-      
-      // Get committed hash from the direct commit query (same as runtime will use)
+
+      // Get committed hash from the direct commit query
       const committedHashHex = myDirectCommit.resultHash.toString();
       let committedHashBytes: Uint8Array;
       try {
@@ -325,9 +340,9 @@ export function JobDetail() {
       console.log('  Result (string):', JSON.stringify(result));
       console.log('  Result (bytes):', Array.from(resultBytes));
       console.log('  Result length:', resultBytes.length);
+      console.log('  Salt (hex):', chainSaltHex);
       console.log('  Salt (bytes):', Array.from(saltU8a));
       console.log('  Salt length:', saltU8a.length);
-      console.log('  Salt (hex):', Array.from(saltU8a).map(b => b.toString(16).padStart(2, '0')).join(''));
       console.log('  Calculated hash (bytes):', Array.from(calculatedHash));
       console.log('  Calculated hash (hex):', Array.from(calculatedHash).map(b => b.toString(16).padStart(2, '0')).join(''));
       console.log('  Committed hash (hex):', committedHashHex);
@@ -351,12 +366,13 @@ export function JobDetail() {
               `- Extra spaces or newlines\n` +
               `- Different encoding\n` +
               `- Salt mismatch\n\n` +
-              `Try using "Restore Committed Result" button.`);
+              `Try using "Restore & Verify" button.`);
         setIsRevealing(false);
         return;
       }
       
       console.log('✅ Hash verification passed locally - proceeding with reveal');
+
 
       const signer = await getSigner(account.address);
       if (!signer) {
@@ -401,10 +417,9 @@ export function JobDetail() {
                 if (errorIndex === 17) { // SaltVerificationFailed
                   errorMessage = 'Salt verification failed! The result you entered does not match the hash you committed. Make sure you enter the EXACT same result text you used when committing.';
                   
-                  // Log detailed comparison for debugging
                   console.error('❌ Salt verification failed on-chain!');
                   console.error('  Result used:', JSON.stringify(result));
-                  console.error('  Salt used (hex):', Array.from(saltU8a).map(b => b.toString(16).padStart(2, '0')).join(''));
+                  console.error('  Salt used (hex):', chainSaltHex);
                   console.error('  Calculated hash (hex):', Array.from(calculatedHash).map(b => b.toString(16).padStart(2, '0')).join(''));
                   console.error('  Committed hash (hex):', committedHashHex);
                 } else {
@@ -451,8 +466,10 @@ export function JobDetail() {
     }
   };
 
+
   const handleFinalize = async () => {
     if (!api || !account) return;
+
 
     try {
       setIsFinalizing(true);
@@ -489,6 +506,7 @@ export function JobDetail() {
     }
   };
 
+
   if (!job) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -497,6 +515,7 @@ export function JobDetail() {
     );
   }
 
+
   const status = job.status.toString() as JobStatus;
   const statusColor = JOB_STATUS_COLORS[status] || JOB_STATUS_COLORS[JobStatus.Pending];
   const jobTypeNum = Number(job.jobType);
@@ -504,6 +523,7 @@ export function JobDetail() {
     ? JOB_TYPE_LABELS[jobTypeNum as JobType]
     : 'Unknown';
   const canFinalize = canFinalizeJob(currentBlock, job.revealDeadline.toNumber());
+
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -515,6 +535,7 @@ export function JobDetail() {
         <span>Back to Jobs</span>
       </button>
 
+
       <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
         <div className="flex items-start justify-between mb-4">
           <div>
@@ -525,6 +546,7 @@ export function JobDetail() {
             {status}
           </span>
         </div>
+
 
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div>
@@ -549,6 +571,7 @@ export function JobDetail() {
           </div>
         </div>
 
+
         <div className="mb-6">
           <p className="text-sm text-gray-500 mb-2">Input Data</p>
           <div className="bg-gray-50 p-4 rounded-lg font-mono text-sm break-all">
@@ -556,6 +579,7 @@ export function JobDetail() {
           </div>
         </div>
       </div>
+
 
       {/* Commit/Reveal Interface */}
       {account && (canCommit || canReveal) && (
@@ -584,12 +608,10 @@ export function JobDetail() {
               >
                 Generate Commit Hash
               </button>
-              {salt && (
+              {saltHex && (
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-1">Salt (32 bytes)</p>
-                  <p className="font-mono text-sm break-all">
-                    0x{Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('')}
-                  </p>
+                  <p className="text-xs text-gray-500 mb-1">Salt (32 bytes hex)</p>
+                  <p className="font-mono text-sm break-all">{saltHex}</p>
                 </div>
               )}
               {commitHash && (
@@ -615,7 +637,7 @@ export function JobDetail() {
               )}
               <button
                 onClick={handleCommit}
-                disabled={isCommitting || !commitHash || !salt}
+                disabled={isCommitting || !commitHash || !saltHex}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isCommitting ? (
@@ -632,6 +654,7 @@ export function JobDetail() {
               </button>
             </div>
           )}
+
 
           {canReveal && (
             <div className="space-y-4">
@@ -681,7 +704,6 @@ export function JobDetail() {
                         
                         console.log('🔍 Verification with stored salt:');
                         console.log('  Stored salt (hex):', storedSaltHex);
-                        console.log('  Stored salt (bytes):', Array.from(storedSalt));
                         console.log('  Stored result:', JSON.stringify(storedResult));
                         console.log('  Calculated hash (hex):', Array.from(calculatedHash).map(b => b.toString(16).padStart(2, '0')).join(''));
                         console.log('  Committed hash (hex):', Array.from(committedHashBytes).map(b => b.toString(16).padStart(2, '0')).join(''));
@@ -734,6 +756,7 @@ export function JobDetail() {
         </div>
       )}
 
+
       {/* Status info for workers */}
       {account && !canCommit && !canReveal && (
         <div className="bg-gray-50 border border-gray-200 p-4 rounded-lg mb-6">
@@ -754,6 +777,7 @@ export function JobDetail() {
           )}
         </div>
       )}
+
 
       {jobCommits.length > 0 && (
         <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
@@ -777,6 +801,7 @@ export function JobDetail() {
         </div>
       )}
 
+
       {jobReveals.length > 0 && (
         <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
           <h2 className="text-lg font-semibold mb-4">Reveals ({jobReveals.length})</h2>
@@ -798,6 +823,7 @@ export function JobDetail() {
           </div>
         </div>
       )}
+
 
       {canFinalize && job.status.toString() !== JobStatus.Completed && account && (
         <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
@@ -821,6 +847,7 @@ export function JobDetail() {
           </button>
         </div>
       )}
+
 
       {jobResult && (
         <div className="bg-white rounded-lg border border-gray-200 p-6">

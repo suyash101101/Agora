@@ -12,13 +12,23 @@ export function HashGenerator() {
   const [result, setResult] = useState('');
   const [salt, setSalt] = useState<Uint8Array | null>(null);
   const [commitHash, setCommitHash] = useState<string | null>(null);
-  const [saltHex, setSaltHex] = useState<string>('');
+  const [saltAscii, setSaltAscii] = useState<string>('');
   const [copied, setCopied] = useState<'salt' | 'hash' | null>(null);
 
   const handleGenerateSalt = () => {
-    const newSalt = generateSalt();
+    // Generate random salt with printable ASCII characters (a-z, A-Z, 0-9, special chars)
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}|;:,.<>?';
+    let saltString = '';
+    const randomBytes = new Uint8Array(32);
+    crypto.getRandomValues(randomBytes);
+    
+    for (let i = 0; i < 32; i++) {
+      saltString += chars[randomBytes[i] % chars.length];
+    }
+    
+    const newSalt = stringToBytes(saltString);
     setSalt(newSalt);
-    setSaltHex(Array.from(newSalt).map(b => b.toString(16).padStart(2, '0')).join(''));
+    setSaltAscii(saltString);
     setCommitHash(null); // Reset hash when salt changes
   };
 
@@ -47,28 +57,19 @@ export function HashGenerator() {
     }
   };
 
-  const handleSaltFromHex = (hex: string) => {
+  const handleSaltFromAscii = (ascii: string) => {
     try {
-      // Remove 0x prefix if present
-      const cleanHex = hex.startsWith('0x') ? hex.slice(2) : hex;
-      // Remove spaces
-      const noSpaces = cleanHex.replace(/\s/g, '');
-      
-      if (noSpaces.length !== 64) {
-        alert('Salt must be 64 hex characters (32 bytes)');
+      if (ascii.length !== 32) {
+        alert('Salt must be exactly 32 ASCII characters (32 bytes)');
         return;
       }
 
-      const saltBytes = new Uint8Array(32);
-      for (let i = 0; i < 32; i++) {
-        saltBytes[i] = parseInt(noSpaces.slice(i * 2, i * 2 + 2), 16);
-      }
-      
+      const saltBytes = stringToBytes(ascii);
       setSalt(saltBytes);
-      setSaltHex(noSpaces);
+      setSaltAscii(ascii);
       setCommitHash(null);
     } catch (error) {
-      alert('Invalid hex format. Must be 64 hex characters.');
+      alert('Invalid ASCII format. Must be 32 ASCII characters.');
     }
   };
 
@@ -100,7 +101,7 @@ export function HashGenerator() {
         {/* Salt Generation */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Salt (32 bytes)
+            Salt (32 bytes ASCII)
           </label>
           <div className="flex gap-2">
             <button
@@ -112,14 +113,15 @@ export function HashGenerator() {
             </button>
             <input
               type="text"
-              value={saltHex}
+              value={saltAscii}
               onChange={(e) => {
-                setSaltHex(e.target.value);
-                if (e.target.value.length === 64) {
-                  handleSaltFromHex(e.target.value);
+                setSaltAscii(e.target.value);
+                if (e.target.value.length === 32) {
+                  handleSaltFromAscii(e.target.value);
                 }
               }}
-              placeholder="Or enter 64 hex chars (32 bytes)"
+              placeholder="Or enter 32 ASCII characters"
+              maxLength={32}
               className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
             />
           </div>
@@ -127,13 +129,13 @@ export function HashGenerator() {
             <div className="mt-2 bg-gray-50 p-3 rounded-lg">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <p className="text-xs text-gray-500 mb-1">Salt (hex)</p>
+                  <p className="text-xs text-gray-500 mb-1">Salt (ASCII, {saltAscii.length} chars)</p>
                   <p className="font-mono text-sm break-all">
-                    0x{saltHex}
+                    {saltAscii}
                   </p>
                 </div>
                 <button
-                  onClick={() => handleCopy('salt', `0x${saltHex}`)}
+                  onClick={() => handleCopy('salt', saltAscii)}
                   className="ml-2 p-2 text-gray-500 hover:text-gray-700 transition-colors"
                   title="Copy salt"
                 >
@@ -186,7 +188,7 @@ export function HashGenerator() {
           <p className="text-sm font-medium text-blue-900 mb-2">How to use:</p>
           <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
             <li>Enter your result in the text area</li>
-            <li>Click "Generate Random Salt" or enter a 64-character hex salt</li>
+            <li>Click "Generate Random Salt" or enter a 32-character ASCII salt</li>
             <li>Click "Generate Commit Hash" to create the commit hash</li>
             <li>Copy the salt and hash values</li>
             <li>Use these values when committing results in the Commit/Reveal interface</li>
@@ -196,4 +198,3 @@ export function HashGenerator() {
     </div>
   );
 }
-
