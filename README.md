@@ -13,13 +13,6 @@ Verifiable Off‑Chain Computation via Commit‑Reveal and XCM
 
 Agora is a Polkadot parachain template extended with a verifiable computation marketplace. It enables parachains to outsource off‑chain jobs (API fetches, computations) to a network of staked workers. Results are verified on‑chain using a crypto‑economic commit‑reveal game. Cross‑parachain requests and result delivery use XCM. This instance has been obtained with paraid 5024 on the Paseo test network.
 
-### Why Agora
-- Verifiable correctness without trusted hardware: commit–reveal with on‑chain verification ensures results are independently checkable.
-- Decentralized worker marketplace: staked workers compete to execute jobs; dishonest actors are slashed, honest majority is rewarded.
-- XCM‑native interoperability: submit from one parachain, execute on another, and receive results back seamlessly.
-- Flexible execution off‑chain: leverage OCWs and external infrastructure for low‑latency IO and scalable compute.
-- Deterministic on‑chain settlement: rewards, slashing, and consensus resolution are transparent and reproducible.
-
 ### Live Walkthough
 [Watch Agora Walk Through](https://app.supademo.com/demo/cm6xuj2sr01o8pegv3s411vap)
 
@@ -27,6 +20,36 @@ Agora is a Polkadot parachain template extended with a verifiable computation ma
 ### App Workflow
 
 ![App Workflow](assets/App_Workflow.png)
+
+### Why Agora
+- Verifiable correctness without trusted hardware: commit–reveal with on‑chain verification ensures results are independently checkable.
+- Decentralized worker marketplace: staked workers compete to execute jobs; dishonest actors are slashed, honest majority is rewarded.
+- XCM‑native interoperability: submit from one parachain, execute on another, and receive results back seamlessly.
+- Flexible execution off‑chain: leverage OCWs and external infrastructure for low‑latency IO and scalable compute.
+- Deterministic on‑chain settlement: rewards, slashing, and consensus resolution are transparent and reproducible.
+  
+## Use Cases:
+⁠•⁠ *Oracle data aggregation*: Request external API data (price feeds, weather, sports scores) from multiple workers, reach consensus on the correct value, and deliver verified results to DeFi protocols.
+
+•⁠ *Decentralized computation*: Offload intensive computations (cryptographic operations, data processing, ML inference) to a distributed worker network without relying on a single centralized service.
+
+•⁠ *Cross-chain data verification*: Enable parachains to request computation from other chains in the Polkadot ecosystem, leveraging specialized compute resources while maintaining trust through majority consensus.
+
+•⁠ *API reliability*: When a single API endpoint is unreliable, multiple workers can fetch from different sources or endpoints, with the majority result being the canonical answer.
+
+## Why Polkadot Architecture is Ideal:
+
+•⁠  ⁠*Native cross-chain communication*: XCM (Cross-Consensus Message Format) enables seamless job submission and result delivery between parachains without bridges or wrapping. Agora leverages this to create a truly interoperable computation marketplace.
+
+•⁠  ⁠*Shared security model*: Parachains inherit security from the relay chain validators, eliminating the need for Agora to bootstrap its own validator set. This reduces costs and increases trust for users submitting jobs.
+
+•⁠  ⁠*Sovereign execution environment*: As a parachain, Agora can customize its runtime specifically for computation marketplace logic (commit-reveal timing, reward distribution, slashing parameters) without constraints from other chains.
+
+•⁠  ⁠*Economic interoperability*: Polkadot's native asset transfer via XCM allows job creators to pay bounties in their own parachain's token, while workers receive rewards in Agora's native token—all atomic and trustless.
+
+•⁠  ⁠*Scalability through specialization*: Dedicated parachain slot allows Agora to optimize for high-throughput job processing without competing for block space with other applications. OCWs can process jobs off-chain and only submit commits/reveals on-chain.
+
+•⁠  ⁠*Future-proof upgrades*: Runtime upgrades enable Agora to evolve its consensus mechanism, add new job types, or adjust economic parameters without hard forks, maintaining backward compatibility.
 
 #### XCM Flow (cross‑parachain request and result delivery)
 
