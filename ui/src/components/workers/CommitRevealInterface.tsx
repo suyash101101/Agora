@@ -98,12 +98,14 @@ export function CommitRevealInterface() {
 
 
   const handleCommit = async () => {
-    if (!api || !account || !selectedJobId || !salt || !commitHash) return;
-
+    
+    if (!api || !account  || !salt || !commitHash) {
+      return;
+    }
 
     try {
       setIsCommitting(true);
-      
+      console.log("start commit");
       // Ensure salt is exactly 32 bytes
       const salt32 = ensureSalt32Bytes(salt);
       
