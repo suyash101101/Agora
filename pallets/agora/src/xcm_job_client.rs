@@ -40,7 +40,7 @@ impl<T: Config> Pallet<T> {
 		sender: T::AccountId,
 		input: BoundedVec<u8, T::MaxInputBytes>,
 		bounty: u128,
-		program_hash: <T as frame_system::Config>::Hash,
+		reputation: u32,
 		job_id: <T as frame_system::Config>::Hash,
 		origin_para_id: u32,
 	) -> Result<Vec<u8>, DispatchError> {
@@ -54,7 +54,7 @@ impl<T: Config> Pallet<T> {
 		encoded.extend_from_slice(&input_data.encode());
 		encoded.extend_from_slice(&bounty.encode());
 		encoded.extend_from_slice(&job_id.encode());
-		encoded.extend_from_slice(&program_hash.encode());
+		encoded.extend_from_slice(&reputation.encode());
 		encoded.extend_from_slice(&origin_para_id.encode());
 		
 		Ok(encoded)
@@ -129,7 +129,7 @@ impl<T: Config> Pallet<T> {
 		dest_para_id: u32,
 		input: BoundedVec<u8, T::MaxInputBytes>,
 		bounty: u128,
-		program_hash: <T as frame_system::Config>::Hash,
+		reputation: u32,
 		origin_para_id: u32,
 	) -> DispatchResult {
 		// Ensure sender has enough balance
@@ -151,7 +151,7 @@ impl<T: Config> Pallet<T> {
 			sender.clone(), 
 			input.clone(), 
 			bounty, 
-			program_hash, 
+			reputation, 
 			job_id,
 			origin_para_id
 		)?;

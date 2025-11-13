@@ -19,10 +19,10 @@ impl<T: Config> Pallet<T> {
 		input: BoundedVec<u8, T::MaxInputBytes>,
 		bounty: u128,
 		job_id: <T as frame_system::Config>::Hash,
-		program_hash: <T as frame_system::Config>::Hash,
+		reputation: u32,
 		origin_para_id: u32,
 	) -> DispatchResult {
-		let local_job_id = Self::do_submit_job(sender.clone(), input, bounty, origin_para_id)?;
+		let local_job_id = Self::do_submit_job(sender.clone(), input, bounty, origin_para_id, reputation)?;
 		
 		RemoteJobInfo::<T>::insert(local_job_id, (origin_para_id, job_id));
 		
@@ -132,6 +132,7 @@ impl<T: Config> Pallet<T> {
 		input: BoundedVec<u8, T::MaxInputBytes>,
 		bounty: u128,
 		origin_para_id: u32,
+		reputation: u32,
 	) -> Result<JobId, DispatchError> {
 		// Ensure bounty meets minimum
 		ensure!(bounty >= T::MinJobBounty::get(), Error::<T>::InsufficientBounty);
@@ -168,6 +169,7 @@ impl<T: Config> Pallet<T> {
 			commit_deadline,
 			reveal_deadline,
 			origin_para_id,
+			reputation,
 			result: BoundedVec::default(),
 		};
 		
