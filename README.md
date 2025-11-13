@@ -127,12 +127,12 @@ The script performs:
 ## Agora Pallet – On‑Chain API
 
 Extrinsics (selected):
-- `agora.submitJob(job_type_id, input_data, bounty)` – Submit a local job with a bounty hold
+- `agora.submitJob(job_type_id, input_data, bounty, reputation)` – Submit a local job with a bounty hold
 - `agora.registerWorker(stake)` / `agora.unregisterWorker()` – Worker enrollment with staking
 - `agora.commitResult(job_id, salt, result_hash)` – Commit phase
 - `agora.revealResult(job_id, result)` – Reveal phase; pallet verifies salted hash
 - `agora.finalizeJob(job_id)` – Finalizes by consensus (auto‑finalization also runs in `on_initialize`)
-- `agora.requestRemoteJob(dest_para_id, input_data, bounty, program_hash)` – Send cross‑para job via XCM
+- `agora.requestRemoteJob(dest_para_id, input_data, bounty, reputation)` – Send cross‑para job via XCM
 
 Events include job submission, commits/reveals, finalization, rewards/slashing, and XCM‑related notifications.
 
