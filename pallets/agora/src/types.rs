@@ -63,6 +63,8 @@ pub struct Job<T: frame_system::Config> {
 	pub origin_para_id: u32,
 	/// Actual result bytes (populated after reveal)
 	pub result: BoundedVec<u8, ConstU32<2048>>,
+	/// Minimum Reputation required for workers to participate
+	pub reputation: u32,
 }
 
 /// Worker information structure
