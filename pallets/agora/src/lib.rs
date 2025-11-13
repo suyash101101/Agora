@@ -295,6 +295,7 @@ pub mod pallet {
         /// XCM send failed
         XcmSendFailed,
         Overflow,
+        InsufficientReputation,
     }
 
     #[pallet::hooks]
@@ -338,6 +339,7 @@ pub mod pallet {
             job_type_id: u8,
             input_data: Vec<u8>,
             bounty: u128,
+            reputation: u32,
         ) -> DispatchResult {
             let creator = ensure_signed(origin)?;
 
@@ -382,6 +384,7 @@ pub mod pallet {
                 commit_deadline,
                 reveal_deadline,
                 origin_para_id: 0,
+                reputation,
                 result: BoundedVec::default(),
             };
 
@@ -445,12 +448,15 @@ pub mod pallet {
             result_hash: <T as frame_system::Config>::Hash,
         ) -> DispatchResult {
             let worker = ensure_signed(origin)?;
-
+            
             ensure!(Workers::<T>::contains_key(&worker), Error::<T>::WorkerNotRegistered);
 
             let mut job = Jobs::<T>::get(job_id).ok_or(Error::<T>::JobNotFound)?;
             let current_block = frame_system::Pallet::<T>::block_number();
             ensure!(current_block <= job.commit_deadline, Error::<T>::CommitDeadlinePassed);
+
+            let worker_info = Workers::<T>::get(&worker).ok_or(Error::<T>::WorkerNotRegistered)?;
+            ensure!(worker_info.reputation >= job.reputation, Error::<T>::InsufficientReputation);
 
             if job.status == JobStatus::Pending {
                 job.status = JobStatus::CommitPhase;
@@ -580,7 +586,7 @@ pub mod pallet {
             dest_para_id: u32,
             input_data: Vec<u8>,
             bounty: u128,
-            program_hash: <T as frame_system::Config>::Hash,
+            reputation: u32,
         ) -> DispatchResult {
             let sender = ensure_signed(origin)?;
             let origin_para_id = u32::from(T::ParaId::get());
@@ -594,7 +600,7 @@ pub mod pallet {
                 dest_para_id, 
                 bounded_input, 
                 bounty, 
-                program_hash,
+                reputation,
                 origin_para_id
             )
         }
@@ -623,7 +629,7 @@ pub mod pallet {
             input_data: Vec<u8>,
             bounty: u128,
             job_id: <T as frame_system::Config>::Hash,
-            program_hash: <T as frame_system::Config>::Hash,
+            reputation: u32,
             origin_para_id: u32,
         ) -> DispatchResult {
             let _ = origin;  // Accept any origin for XCM passthrough
@@ -631,7 +637,7 @@ pub mod pallet {
             let bounded_input: BoundedVec<u8, T::MaxInputBytes> = 
                 input_data.try_into().map_err(|_| Error::<T>::InputDataTooLarge)?;
             
-            Self::handle_xcm_job_submission(sender, bounded_input, bounty, job_id, program_hash, origin_para_id)
+            Self::handle_xcm_job_submission(sender, bounded_input, bounty, job_id, reputation, origin_para_id)
         }
     }
 }
