@@ -22,11 +22,13 @@ Agora is a Polkadot parachain template extended with a verifiable computation ma
 ![App Workflow](assets/App_Workflow.png)
 
 ### Why Agora
-- Verifiable correctness without trusted hardware: commit–reveal with on‑chain verification ensures results are independently checkable.
-- Decentralized worker marketplace: staked workers compete to execute jobs; dishonest actors are slashed, honest majority is rewarded.
-- XCM‑native interoperability: submit from one parachain, execute on another, and receive results back seamlessly.
-- Flexible execution off‑chain: leverage OCWs and external infrastructure for low‑latency IO and scalable compute.
-- Deterministic on‑chain settlement: rewards, slashing, and consensus resolution are transparent and reproducible.
+- *Cryptoeconomic Verification Without TEEs:* Two-phase commit-reveal protocol (⁠ H(salt || result) ⁠) with on-chain hash verification prevents post-commitment manipulation. Byzantine fault tolerance via majority consensus without SGX dependencies.
+  
+- *Incentive-Aligned Worker Marketplace:* Staked workers face dual penalties—economic slashing + persistent reputation decay. Honest majority splits bounties; dishonest actors suffer compounding penalties, making long-term defection irrational.
+
+- *XCM-Native Interoperability:* Cross-parachain job submission via ⁠ Transact ⁠ instruction, sovereign account fee payment, asynchronous result callbacks through HRMP channels. Native multi-asset bounty support via ⁠ MultiLocation ⁠ addressing without bridge trust assumptions.
+
+- *Hybrid Execution Model:* OCWs handle I/O-bound tasks (API fetches, crypto ops) off-chain; only commit hashes and reveals touch on-chain storage. Deterministic ⁠ on_initialize ⁠ settlement ensures reproducible consensus, reward distribution, and reputation updates across all nodes—critical for cross-chain result verification.
   
 ## Use Cases:
 ⁠•⁠ *Oracle data aggregation*: Request external API data (price feeds, weather, sports scores) from multiple workers, reach consensus on the correct value, and deliver verified results to DeFi protocols.
