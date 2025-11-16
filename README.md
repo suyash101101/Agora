@@ -16,11 +16,6 @@ Agora is a Polkadot parachain template extended with a verifiable computation ma
 ### Live Walkthough
 [Watch Agora Walk Through](https://app.supademo.com/demo/cm6xuj2sr01o8pegv3s411vap)
 
-
-### App Workflow
-
-![App Workflow](assets/App_Workflow.png)
-
 ### Why Agora
 - *Cryptoeconomic Verification Without TEEs:* Two-phase commit-reveal protocol (⁠ H(salt || result) ⁠) with on-chain hash verification prevents post-commitment manipulation. Byzantine fault tolerance via majority consensus without SGX dependencies.
   
@@ -68,6 +63,10 @@ Agora is a Polkadot parachain template extended with a verifiable computation ma
   - XCM client/handler for cross‑parachain job requests and result notifications
 - Zombienet configs (`zombienet-*.toml`): Local networks with relay chain + 2 parachain instances for XCM demos.
 - Scripts (`JS/`): Utilities to fund sovereign accounts, open HRMP channels, and run a cross‑chain job demo.
+
+### App Workflow
+
+![App Workflow](assets/App_Workflow.png)
 
 ## Repository Layout
 
