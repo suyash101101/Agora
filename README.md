@@ -48,10 +48,6 @@ Agora is a Polkadot parachain template extended with a verifiable computation ma
 
 •⁠  ⁠*Future-proof upgrades*: Runtime upgrades enable Agora to evolve its consensus mechanism, add new job types, or adjust economic parameters without hard forks, maintaining backward compatibility.
 
-#### XCM Flow (cross‑parachain request and result delivery)
-
-![XCM Workflow](assets/XCM_Workflow.png)
-
 ## High‑Level Architecture
 
 - Runtime (`runtime/`): FRAME‑based runtime with balances, collator pallets, XCM helpers, and the `agora` pallet. XCM is configured for local testing with permissive filters.
