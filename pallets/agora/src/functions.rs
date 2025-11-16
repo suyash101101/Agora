@@ -98,7 +98,8 @@ impl<T: Config> Pallet<T> {
                 worker_info.stake = worker_info.stake.saturating_sub(slash_amount);
                 
                 // Reduce reputation
-                worker_info.reputation = worker_info.reputation.saturating_sub(50);
+                worker_info.reputation = worker_info.reputation.saturating_sub(worker_info.reputation / 10);    
+
                 
                 Workers::<T>::insert(&worker, worker_info);
                 
