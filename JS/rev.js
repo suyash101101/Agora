@@ -49,5 +49,5 @@ async function quickOpen2() {
   });
 }
 
-quickOpen2().catch(console.error);
+quickOpen().catch(console.error);
 
